@@ -1,0 +1,2712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fan Finder - Web Interface</title>
+    <!-- Version will be loaded dynamically -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="style.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    <link rel="shortcut icon" href="favicon.ico">
+    <style>
+        /* Default 90% zoom for the entire interface */
+        body {
+            zoom: 90%;
+            transform-origin: 0 0;
+        }
+        
+        /* Custom Orange Outline Button */
+        .btn-outline-orange {
+            border: 1px solid #ff6b35;
+            color: #ff6b35;
+            background: transparent;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-outline-orange:hover {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            border-color: #ff6b35;
+        }
+        
+        .btn-outline-orange:focus,
+        .btn-outline-orange.focus {
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+        }
+        
+        /* Loading Screen Styles */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #ff6b35 0%, #1e3a5f 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease-out;
+        }
+
+        #loading-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .loading-logo {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            text-align: center;
+            width: 100%;
+            animation: logoFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { 
+                transform: translateY(0px);
+            }
+            50% { 
+                transform: translateY(-10px);
+            }
+        }
+
+        .robot-icon {
+            font-size: 4rem;
+            color: #333;
+            animation: robotPulse 2s infinite ease-in-out;
+        }
+
+        .app-name {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+            background-size: 400% 400%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 3s ease-in-out infinite;
+            display: inline;
+        }
+
+        .loading-subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+
+        .loading-dots {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            animation: loadingDots 1.4s infinite ease-in-out;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        .dot:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes robotPulse {
+            0%, 100% { 
+                transform: scale(1) rotate(0deg); 
+                opacity: 1; 
+                filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.5));
+            }
+            25% { 
+                transform: scale(1.05) rotate(-5deg); 
+                opacity: 0.9; 
+                filter: drop-shadow(0 0 15px rgba(255, 107, 53, 0.7));
+            }
+            50% { 
+                transform: scale(1.1) rotate(0deg); 
+                opacity: 0.8; 
+                filter: drop-shadow(0 0 20px rgba(255, 107, 53, 0.9));
+            }
+            75% { 
+                transform: scale(1.05) rotate(5deg); 
+                opacity: 0.9; 
+                filter: drop-shadow(0 0 15px rgba(255, 107, 53, 0.7));
+            }
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 25% 50%; }
+            50% { background-position: 100% 50%; }
+            75% { background-position: 75% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+
+        @keyframes loadingDots {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Main content initially hidden */
+        .main-content {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+
+        .main-content.show {
+            opacity: 1;
+        }
+
+        /* Enhanced brand styling */
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .navbar-brand .fas.fa-robot {
+            color: #333;
+        }
+
+        /* Modern Users Container */
+        .users-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            background-color: #f9fafb;
+            padding: 0.5rem;
+        }
+        
+        .user-item {
+            padding: 1rem 1.25rem;
+            border: none;
+            background-color: white;
+            margin-bottom: 0.5rem;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        
+        .user-item:hover {
+            background-color: rgba(255, 107, 53, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.1);
+        }
+        
+        .user-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        
+        .user-timestamp {
+            font-size: 0.8rem;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .user-item.new {
+            animation: userSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.05), rgba(229, 90, 0, 0.05));
+            border-left: 4px solid #ff6b35;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.15);
+        }
+        
+        @keyframes userSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+        
+        /* Enhanced Badge styling */
+        .badge {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+        }
+        
+        /* Modern scrollbar */
+        .users-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .users-container::-webkit-scrollbar-track {
+            background: #e5e7eb;
+            border-radius: 6px;
+        }
+        
+        .users-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #ff6b35, #e55a00);
+            border-radius: 6px;
+        }
+        
+        .users-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #e55a00, #d14d00);
+        }
+        
+        /* Enhanced Pricing Styles */
+        .hover-lift {
+            transition: all 0.3s ease;
+        }
+        
+        .hover-lift:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1) !important;
+        }
+        
+        .popular-plan {
+            border: 2px solid #ff6b35 !important;
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.02), rgba(247, 147, 30, 0.02));
+        }
+        
+        .pricing-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover .pricing-icon {
+            transform: scale(1.1);
+        }
+        
+        .features-list li {
+            transition: all 0.2s ease;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+        }
+        
+        .features-list li:hover {
+            background: rgba(255, 107, 53, 0.05);
+            transform: translateX(5px);
+        }
+        
+        /* Gradient buttons */
+        .btn-gradient-primary {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border: none;
+            color: white;
+        }
+        
+        .btn-gradient-primary:hover {
+            background: linear-gradient(135deg, #e55a00, #d14d00);
+            color: white;
+        }
+        
+        /* Pricing animations */
+        .pricing-amount {
+            position: relative;
+        }
+        
+        .pricing-amount::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border-radius: 2px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .card:hover .pricing-amount::after {
+            opacity: 1;
+        }
+        
+        /* Enhanced shadows and borders */
+        .shadow-lg {
+            box-shadow: 0 15px 35px rgba(0,0,0,0.08) !important;
+        }
+        
+        .rounded-4 {
+            border-radius: 1.5rem !important;
+        }
+        
+        /* Modern Modal Styles */
+        .modal-content {
+            border: none !important;
+        }
+        
+        .payment-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .payment-card:hover {
+            border-color: #ff6b35;
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.1);
+        }
+        
+        .payment-detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .payment-detail-item:last-child {
+            border-bottom: none;
+        }
+        
+        .payment-label {
+            font-weight: 500;
+            color: #6c757d;
+        }
+        
+        .payment-value {
+            font-weight: 600;
+            color: #212529;
+        }
+        
+        .plan-features {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.05), rgba(247, 147, 30, 0.05));
+            border: 1px solid rgba(255, 107, 53, 0.1);
+            border-radius: 15px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255, 107, 53, 0.1);
+        }
+        
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+        
+        .steps-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 1.5rem;
+        }
+        
+        .step-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .step-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.875rem;
+            margin-right: 1rem;
+        }
+        
+        .savings-highlight {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(25, 135, 84, 0.1));
+            border: 2px solid rgba(40, 167, 69, 0.2);
+            border-radius: 15px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        /* Instructions Page Styles */
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.875rem;
+            flex-shrink: 0;
+        }
+
+        .instruction-step {
+            padding: 1rem;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .instruction-step:hover {
+            background: rgba(255, 107, 53, 0.05);
+            transform: translateX(5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <i class="fas fa-robot robot-icon"></i>
+                <span class="app-name">Fan Finder</span>
+            </div>
+            <div class="loading-subtitle">Advanced Maloum Creator Tool</div>
+            <div class="loading-dots">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-robot me-2"></i>
+                    Fan Finder <span id="navbar-version" class="text-light ms-1" style="font-size: 0.6em; font-weight: 300; opacity: 0.8;"></span>
+                </a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text text-light me-3">
+                        Advanced Maloum Creator Tool
+                    </span>
+                    <!-- User info will be dynamically added here by JavaScript -->
+                </div>
+            </div>
+        </nav>
+
+    <div class="container mt-2">
+        <!-- Connection Status (hidden by default) -->
+        <div class="row mb-2">
+            <div class="col-12">
+                <div class="alert alert-info d-flex align-items-center" id="connection-status" style="display: none;">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <span>Connecting to server...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tachometer-alt me-2"></i>System Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="status-indicator me-2" id="discovery-status-indicator"></span>
+                                    <strong>Discovery Search:</strong>
+                                    <span class="ms-2" id="discovery-status-text">Ready</span>
+                                </div>
+                                <div class="progress mb-2" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped bg-primary" 
+                                         id="discovery-progress" role="progressbar" 
+                                         style="width: 0%; transition: width 0.5s ease;"
+                                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                        <span class="fw-bold">0 / 0 users (0%)</span>
+                                    </div>
+                                </div>
+                                <small class="text-muted" id="discovery-info">Ready to start</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="status-indicator me-2" id="keyword-status-indicator"></span>
+                                    <strong>Keyword Search:</strong>
+                                    <span class="ms-2" id="keyword-status-text">Ready</span>
+                                </div>
+                                <div class="progress mb-2" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped bg-primary" 
+                                         id="keyword-progress" role="progressbar" 
+                                         style="width: 0%; transition: width 0.5s ease;"
+                                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                        <span class="fw-bold">0 / 0 users (0%)</span>
+                                    </div>
+                                </div>
+                                <small class="text-muted" id="keyword-info">Ready to start</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Tabs -->
+        <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="discovery-tab" data-bs-toggle="tab" 
+                        data-bs-target="#discovery-panel" type="button">
+                    <i class="fas fa-search me-2"></i>Discovery Search
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="keyword-tab" data-bs-toggle="tab" 
+                        data-bs-target="#keyword-panel" type="button">
+                    <i class="fas fa-key me-2"></i>Keyword Search
+                </button>
+            </li>
+            
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pricing-tab" data-bs-toggle="tab" 
+                        data-bs-target="#pricing-panel" type="button">
+                    <i class="fas fa-tags me-2"></i>Pricing
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="instructions-tab" data-bs-toggle="tab" 
+                        data-bs-target="#instructions-panel" type="button">
+                    <i class="fas fa-info-circle me-2"></i>Instructions
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="mainTabsContent">
+            <!-- Discovery Search Panel -->
+            <div class="tab-pane fade show active" id="discovery-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-search me-2"></i>Discovery Search Configuration
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="discovery-form">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-user me-1"></i>Username:
+                                        </label>
+                                        <input type="text" class="form-control" id="discovery-username" 
+                                               placeholder="Enter your Maloum Username" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-lock me-1"></i>Password:
+                                        </label>
+                                        <input type="password" class="form-control" id="discovery-password" 
+                                               placeholder="Enter your Maloum Password" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="discovery-show-browser" checked>
+                                            <label class="form-check-label" for="discovery-show-browser">
+                                                <i class="fas fa-eye me-1"></i>Realtime Preview
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Watch the automation live on your screen
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-bullseye me-1"></i>Target Fans:
+                                        </label>
+                                        <input type="number" class="form-control" id="discovery-target-users" 
+                                               value="100" min="1" max="10000" placeholder="Number of fans to discover">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-filter me-1"></i>Posts per Filter:
+                                        </label>
+                                        <input type="number" class="form-control" id="discovery-posts-per-filter" 
+                                               value="100" min="1" max="1000" placeholder="Posts to process per filter">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <button type="button" class="btn btn-success btn-lg me-2" id="discovery-start-btn">
+                                    <i class="fas fa-play me-2"></i>Start Discovery Search
+                                </button>
+                                <button type="button" class="btn btn-danger btn-lg" id="discovery-stop-btn" 
+                                        style="display: none;">
+                                    <i class="fas fa-stop me-2"></i>Stop Fan Discovery
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Discovery Collected Users Section -->
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                        <h6 class="mb-0">
+                            <i class="fas fa-users me-2 text-primary"></i>Discovered Fans
+                        </h6>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-primary me-2" id="discovery-user-count">0 fans</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearUsers('discovery')" title="Clear all discovered fans">
+                                <i class="fas fa-trash me-1"></i>Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="users-container" id="discovery-users-container">
+                            <div class="text-muted text-center p-4">
+                                <i class="fas fa-users fa-2x mb-2 opacity-50"></i>
+                                <div>No fans discovered yet...</div>
+                                <small>Fans will appear here when Fan Finder discovers them</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyword Search Panel -->
+            <div class="tab-pane fade" id="keyword-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-key me-2"></i>Keyword Search Configuration
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="keyword-form">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-user me-1"></i>Username:
+                                        </label>
+                                        <input type="text" class="form-control" id="keyword-username" 
+                                               placeholder="Enter your Maloum Username" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-lock me-1"></i>Password:
+                                        </label>
+                                        <input type="password" class="form-control" id="keyword-password" 
+                                               placeholder="Enter your Maloum Password" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="keyword-show-browser" checked>
+                                            <label class="form-check-label" for="keyword-show-browser">
+                                                <i class="fas fa-eye me-1"></i>Realtime Preview
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Watch the automation live on your screen
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-bullseye me-1"></i>Target Fans:
+                                        </label>
+                                        <input type="number" class="form-control" id="keyword-target-users" 
+                                               value="100" min="1" max="10000" placeholder="Number of fans to discover">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-hashtag me-1"></i>Posts per Keyword:
+                                        </label>
+                                        <input type="number" class="form-control" id="keyword-posts-per-keyword" 
+                                               value="50" min="1" max="1000" placeholder="Posts to process per keyword">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <button type="button" class="btn btn-success btn-lg me-2" id="keyword-start-btn">
+                                    <i class="fas fa-play me-2"></i>Start Keyword Search
+                                </button>
+                                <button type="button" class="btn btn-danger btn-lg" id="keyword-stop-btn" 
+                                        style="display: none;">
+                                    <i class="fas fa-stop me-2"></i>Stop Keyword Search
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Keyword Collected Users Section -->
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                        <h6 class="mb-0">
+                            <i class="fas fa-users me-2 text-primary"></i>Found Fans
+                        </h6>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-primary me-2" id="keyword-user-count">0 fans</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearUsers('keyword')" title="Clear all found fans">
+                                <i class="fas fa-trash me-1"></i>Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="users-container" id="keyword-users-container">
+                            <div class="text-muted text-center p-4">
+                                <i class="fas fa-users fa-2x mb-2 opacity-50"></i>
+                                <div>No fans found yet...</div>
+                                <small>Fans will appear here when Fan Finder finds them</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            
+
+            <!-- Pricing Panel -->
+            <div class="tab-pane fade" id="pricing-panel" role="tabpanel">
+                <div class="container-fluid mt-4">
+                    <div class="text-center mb-5">
+                        <h2 class="fw-bold mb-2">
+                            <i class="fas fa-tags text-primary me-3"></i>Choose Your Plan
+                        </h2>
+                        <p class="text-muted lead">Select the perfect plan to grow your Maloum community</p>
+                    </div>
+
+                    <div class="row justify-content-center g-4">
+                        <!-- Basic Plan -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 border-0 shadow-lg rounded-4 overflow-hidden hover-lift">
+                                <div class="card-body p-4 text-center">
+                                    <div class="pricing-icon mb-3">
+                                        <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                            <i class="fas fa-calendar text-primary" style="font-size: 1.5rem;"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <h5 class="card-title fw-bold mb-1">Basic Plan</h5>
+                                    <p class="text-muted mb-3 small">Perfect for getting started</p>
+                                    
+                                    <div class="pricing-amount mb-3">
+                                        <div class="h2 fw-bold text-primary mb-1">
+                                            <span id="monthly-price-currency">€</span><span id="monthly-price">20</span>
+                                        </div>
+                                        <small class="text-muted">per month</small>
+                                    </div>
+                                    
+                                    <div class="features-list mb-5">
+                                        <ul class="list-unstyled">
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Discovery Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Keyword Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Real-time Progress</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Browser Automation</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-users text-primary me-3 fs-5"></i>
+                                                <span><strong>Max 25 Fans per Search</strong></span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-primary btn-lg rounded-3 py-3" onclick="window.app.showUsernameModal('monthly')">
+                                            <i class="fas fa-arrow-right me-2"></i>Choose Basic
+                                        </button>
+                                        <button class="btn btn-success btn-lg rounded-3 py-3" id="trial-btn" onclick="window.app.showFreeTrialModal()" style="display: none;">
+                                            <i class="fas fa-gift me-2"></i>Start Free Trial
+                                        </button>
+                                    </div>
+                                    
+                                    <small class="text-muted mt-3 d-block" id="trial-info" style="display: none;">
+                                        <i class="fas fa-info-circle me-1"></i>Try for 24 hours - one time only!
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Popular Plan -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 border-0 shadow-lg rounded-4 overflow-hidden popular-plan position-relative">
+                                <div class="position-absolute top-0 start-50 translate-middle">
+                                    <span class="badge bg-gradient text-white px-4 py-2 rounded-pill" style="background: linear-gradient(135deg, #ff6b35, #f7931e);">
+                                        <i class="fas fa-star me-1"></i>Most Popular
+                                    </span>
+                                </div>
+                                
+                                <div class="card-body p-5 text-center" style="padding-top: 3.5rem !important;">
+                                    <div class="pricing-icon mb-3">
+                                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center text-white" 
+                                             style="width: 60px; height: 60px; background: linear-gradient(135deg, #ff6b35, #f7931e);">
+                                            <i class="fas fa-calendar-alt" style="font-size: 1.5rem;"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <h5 class="card-title fw-bold mb-1">Pro Plan</h5>
+                                    <p class="text-muted mb-3 small">Best value for growing creators</p>
+                                    
+                                    <div class="pricing-amount mb-2">
+                                        <div class="text-decoration-line-through text-muted mb-1">
+                                            <span id="sixmonth-original-currency">€</span><span id="sixmonth-original-price">120</span>
+                                        </div>
+                                        <div class="h2 fw-bold mb-1" style="color: #ff6b35;">
+                                            <span id="sixmonth-price-currency">€</span><span id="sixmonth-price">84</span>
+                                        </div>
+                                        <small class="text-muted">for 6 months</small>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <span class="badge bg-success px-3 py-2 rounded-pill">Save 30%</span>
+                                    </div>
+                                    
+                                    <div class="features-list mb-4">
+                                        <ul class="list-unstyled">
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Discovery Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Keyword Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Real-time Progress</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Browser Automation</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-users me-3 fs-5" style="color: #ff6b35;"></i>
+                                                <span><strong>Max 100 Fans per Search</strong></span>
+                                            </li>
+                                        </ul>
+                                        
+                                        <div class="mt-4 p-3 rounded-3" style="background: rgba(40, 167, 69, 0.1);">
+                                            <small class="text-success fw-bold">
+                                                <i class="fas fa-piggy-bank me-2"></i>
+                                                You save <span id="sixmonth-savings-currency">€</span><span id="sixmonth-savings">36</span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button class="btn rounded-3 py-2 text-white border-0" 
+                                                style="background: linear-gradient(135deg, #ff6b35, #f7931e);" 
+                                                onclick="window.app.showUsernameModal('sixmonth')">
+                                            <i class="fas fa-arrow-right me-2"></i>Choose Pro
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Premium Plan -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="card h-100 border-0 shadow-lg rounded-4 overflow-hidden hover-lift">
+                                <div class="card-body p-4 text-center">
+                                    <div class="pricing-icon mb-3">
+                                        <div class="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                            <i class="fas fa-crown text-success" style="font-size: 1.5rem;"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <h5 class="card-title fw-bold mb-1">Premium Plan</h5>
+                                    <p class="text-muted mb-3 small">Unlimited growth potential</p>
+                                    
+                                    <div class="pricing-amount mb-2">
+                                        <div class="text-decoration-line-through text-muted mb-1">
+                                            <span id="yearly-original-currency">€</span><span id="yearly-original-price">240</span>
+                                        </div>
+                                        <div class="h2 fw-bold text-success mb-1">
+                                            <span id="yearly-price-currency">€</span><span id="yearly-price">120</span>
+                                        </div>
+                                        <small class="text-muted">for 1 year</small>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <span class="badge bg-danger px-2 py-1 rounded-pill">Save 50%</span>
+                                    </div>
+                                    
+                                    <div class="features-list mb-4">
+                                        <ul class="list-unstyled">
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Discovery Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Keyword Search</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Real-time Progress</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-check-circle text-success me-3 fs-5"></i>
+                                                <small>Browser Automation</small>
+                                            </li>
+                                            <li class="d-flex align-items-center mb-3">
+                                                <i class="fas fa-infinity text-success me-3 fs-5"></i>
+                                                <span><strong>Unlimited Fans per Search</strong></span>
+                                            </li>
+                                        </ul>
+                                        
+                                        <div class="mt-4 p-3 rounded-3" style="background: rgba(220, 53, 69, 0.1);">
+                                            <small class="text-danger fw-bold">
+                                                <i class="fas fa-piggy-bank me-2"></i>
+                                                You save <span id="yearly-savings-currency">€</span><span id="yearly-savings">120</span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button class="btn btn-success rounded-3 py-2" onclick="window.app.showUsernameModal('yearly')">
+                                            <i class="fas fa-arrow-right me-2"></i>Choose Premium
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Features Comparison -->
+                    <div class="row mt-5">
+                        <div class="col-12">
+                            <div class="text-center mb-4">
+                                <h4 class="fw-bold mb-2">All Plans Include</h4>
+                                <p class="text-muted">Essential features to grow your community</p>
+                            </div>
+                            
+                            <div class="row g-4">
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="text-center p-4 rounded-3 bg-light h-100">
+                                        <i class="fas fa-search text-primary fs-1 mb-3"></i>
+                                        <h6 class="fw-bold">Smart Discovery</h6>
+                                        <small class="text-muted">Find engaged fans automatically</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="text-center p-4 rounded-3 bg-light h-100">
+                                        <i class="fas fa-key text-primary fs-1 mb-3"></i>
+                                        <h6 class="fw-bold">Keyword Targeting</h6>
+                                        <small class="text-muted">Target specific interests</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="text-center p-4 rounded-3 bg-light h-100">
+                                        <i class="fas fa-chart-line text-primary fs-1 mb-3"></i>
+                                        <h6 class="fw-bold">Real-time Progress</h6>
+                                        <small class="text-muted">Track your search live</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="text-center p-4 rounded-3 bg-light h-100">
+                                        <i class="fas fa-robot text-primary fs-1 mb-3"></i>
+                                        <h6 class="fw-bold">Full Automation</h6>
+                                        <small class="text-muted">Hands-free fan discovery</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Instructions Panel -->
+            <div class="tab-pane fade" id="instructions-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Instructions & Help
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="container-fluid p-4">
+                            <!-- Header Section -->
+                            <div class="text-center mb-5">
+                                <i class="fas fa-robot fa-3x text-dark mb-3"></i>
+                                <h2 class="fw-bold text-primary mb-2">How to Use Fan Finder</h2>
+                                <p class="lead text-muted">Complete guide to growing your Maloum community</p>
+                            </div>
+
+                            <!-- Quick Start Guide -->
+                            <div class="row mb-5">
+                                <div class="col-12">
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-rocket me-2"></i>Quick Start Guide</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge rounded-pill me-2" style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white;">1</span>
+                                                        <strong>Enter Credentials</strong>
+                                                    </div>
+                                                    <small class="text-muted ms-4">Input your Maloum username and password</small>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge rounded-pill me-2" style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white;">2</span>
+                                                        <strong>Choose Search Type</strong>
+                                                    </div>
+                                                    <small class="text-muted ms-4">Select Discovery or Keyword Search</small>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="badge rounded-pill me-2" style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white;">3</span>
+                                                        <strong>Start & Monitor</strong>
+                                                    </div>
+                                                    <small class="text-muted ms-4">Click start and watch real-time progress</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Search Methods -->
+                            <div class="row mb-5">
+                                <div class="col-lg-6 mb-4">
+                                    <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Discovery Search</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="mb-3">Intelligently discovers engaged fans through content analysis.</p>
+                                            
+                                            <h6 class="text-success"><i class="fas fa-cog me-1"></i>Configuration:</h6>
+                                            <ul class="list-unstyled mb-3">
+                                                <li class="mb-2"><i class="fas fa-user text-muted me-2"></i><strong>Username & Password:</strong> Your Maloum credentials</li>
+                                                <li class="mb-2"><i class="fas fa-bullseye text-muted me-2"></i><strong>Target Fans:</strong> Maximum fans per search <small class="text-muted">(Basic: 25, Pro: 100, Premium: Unlimited)</small></li>
+                                                <li class="mb-2"><i class="fas fa-filter text-muted me-2"></i><strong>Posts per Filter:</strong> Content to analyze (default: 100)</li>
+                                                <li class="mb-2"><i class="fas fa-eye text-muted me-2"></i><strong>Realtime Preview:</strong> Watch automation live</li>
+                                            </ul>
+
+                                            <h6 class="text-success"><i class="fas fa-lightbulb me-1"></i>Best For:</h6>
+                                            <ul class="small text-muted mb-0">
+                                                <li>Finding highly engaged users</li>
+                                                <li>Quality over quantity approach</li>
+                                                <li>Building authentic communities</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-6 mb-4">
+                                    <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-key me-2"></i>Keyword Search</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="mb-3">Targets fans using strategic keywords and interests.</p>
+                                            
+                                            <h6 class="text-info"><i class="fas fa-cog me-1"></i>Configuration:</h6>
+                                            <ul class="list-unstyled mb-3">
+                                                <li class="mb-2"><i class="fas fa-user text-muted me-2"></i><strong>Username & Password:</strong> Your Maloum credentials</li>
+                                                <li class="mb-2"><i class="fas fa-bullseye text-muted me-2"></i><strong>Target Fans:</strong> Maximum fans per search <small class="text-muted">(Basic: 25, Pro: 100, Premium: Unlimited)</small></li>
+                                                <li class="mb-2"><i class="fas fa-hashtag text-muted me-2"></i><strong>Posts per Keyword:</strong> Content to search (default: 50)</li>
+                                                <li class="mb-2"><i class="fas fa-eye text-muted me-2"></i><strong>Realtime Preview:</strong> Watch automation live</li>
+                                            </ul>
+
+                                            <h6 class="text-info"><i class="fas fa-lightbulb me-1"></i>Best For:</h6>
+                                            <ul class="small text-muted mb-0">
+                                                <li>Targeting specific niches</li>
+                                                <li>Interest-based fan discovery</li>
+                                                <li>Rapid audience building</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- How It Works - Automation Flow -->
+                            <div class="row mb-5">
+                                <div class="col-12">
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>How the Automation Works</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="alert alert-info border-0 mb-4">
+                                                <h6 class="mb-2"><i class="fas fa-shield-alt me-2"></i>Why We Need Your Maloum Credentials</h6>
+                                                <p class="mb-0 small">Fan Finder needs to log into your Maloum account to access the platform and discover engaged users. Your credentials are used only for automation - they're processed locally and never stored or shared.</p>
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-lg-6 mb-4">
+                                                    <div class="card bg-light h-100">
+                                                        <div class="card-body">
+                                                            <h6 class="text-success mb-3"><i class="fas fa-search me-2"></i>Discovery Search Flow</h6>
+                                                            <ol class="small mb-0">
+                                                                <li class="mb-2"><strong>Browser Launch:</strong> Opens Chrome (visible or background based on your toggle)</li>
+                                                                <li class="mb-2"><strong>Navigate to Maloum:</strong> Goes to maloum.com and logs in with your credentials</li>
+                                                                <li class="mb-2"><strong>Access Mass Messages:</strong> Goes to your mass message folder list</li>
+                                                                <li class="mb-2"><strong>Create "All Users" Folder:</strong> First run creates an "All Users" folder and adds all existing users from your account</li>
+                                                                <li class="mb-2"><strong>Sync Check:</strong> Subsequent runs check the "All Users" folder to compare with local database</li>
+                                                                <li class="mb-2"><strong>Load Existing Users:</strong> Loads your local database of previously found users</li>
+                                                                <li class="mb-2"><strong>Content Analysis:</strong> Navigates through posts and analyzes engagement patterns</li>
+                                                                <li class="mb-2"><strong>User Discovery:</strong> Identifies active commenters and engaged users</li>
+                                                                <li class="mb-2"><strong>Add to "All Users":</strong> New users are automatically added to your "All Users" mass message folder</li>
+                                                                <li class="mb-2"><strong>Real-time Updates:</strong> Shows progress and discovered users in the interface</li>
+                                                                <li class="mb-2"><strong>Data Storage:</strong> Saves all discovered users to your local database</li>
+                                                            </ol>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-lg-6 mb-4">
+                                                    <div class="card bg-light h-100">
+                                                        <div class="card-body">
+                                                            <h6 class="text-info mb-3"><i class="fas fa-key me-2"></i>Keyword Search Flow</h6>
+                                                            <ol class="small mb-0">
+                                                                <li class="mb-2"><strong>Browser Launch:</strong> Opens Chrome (visible or background based on your toggle)</li>
+                                                                <li class="mb-2"><strong>Navigate to Maloum:</strong> Goes to maloum.com and logs in with your credentials</li>
+                                                                <li class="mb-2"><strong>Access Mass Messages:</strong> Goes to your mass message folder list</li>
+                                                                <li class="mb-2"><strong>Create "All Users" Folder:</strong> First run creates an "All Users" folder and adds all existing users from your account</li>
+                                                                <li class="mb-2"><strong>Sync Check:</strong> Subsequent runs check the "All Users" folder to compare with local database</li>
+                                                                <li class="mb-2"><strong>Load Existing Users:</strong> Loads your local database of previously found users</li>
+                                                                <li class="mb-2"><strong>Access Search:</strong> Navigates to Maloum's search functionality</li>
+                                                                <li class="mb-2"><strong>Keyword Processing:</strong> Searches for posts containing strategic keywords</li>
+                                                                <li class="mb-2"><strong>User Discovery:</strong> Identifies users who interact with keyword-based content</li>
+                                                                <li class="mb-2"><strong>Add to "All Users":</strong> New users are automatically added to your "All Users" mass message folder</li>
+                                                                <li class="mb-2"><strong>Data Storage:</strong> Saves all discovered users to your local database</li>
+                                                            </ol>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="alert alert-warning border-0 mt-4">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-exclamation-triangle fa-lg me-3 mt-1"></i>
+                                                    <div>
+                                                        <h6 class="mb-2"><strong>Important: Do NOT Delete the "All Users" Folder!</strong></h6>
+                                                        <p class="mb-2 small">Fan Finder automatically creates an "All Users" folder in your Maloum mass message lists during the first run. This folder is essential for the system to work properly.</p>
+                                                        <ul class="small mb-0">
+                                                            <li><strong>First Run:</strong> Creates "All Users" folder and imports all existing users from your account</li>
+                                                            <li><strong>Every Run:</strong> Checks this folder to sync data and avoid duplicates</li>
+                                                            <li><strong>New Users:</strong> Automatically added to this folder for future messaging campaigns</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row mt-4">
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="d-flex align-items-start">
+                                                        <i class="fas fa-database text-primary fa-lg me-3 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="mb-1">Local Data Storage</h6>
+                                                            <p class="small text-muted mb-0">All discovered users are saved to your local computer. Each user account has its own database file to prevent mixing different account data.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="d-flex align-items-start">
+                                                        <i class="fas fa-sync text-primary fa-lg me-3 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="mb-1">Smart Synchronization</h6>
+                                                            <p class="small text-muted mb-0">The system syncs with your existing Maloum "All Users" mass message list to avoid duplicates and maintain data consistency.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="d-flex align-items-start">
+                                                        <i class="fas fa-eye text-primary fa-lg me-3 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="mb-1">Realtime Preview</h6>
+                                                            <p class="small text-muted mb-0">When enabled, you can watch the automation work live in the Chrome browser, seeing exactly how it navigates and discovers users.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="d-flex align-items-start">
+                                                        <i class="fas fa-shield-check text-primary fa-lg me-3 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="mb-1">Safe & Secure</h6>
+                                                            <p class="small text-muted mb-0">Your credentials are processed locally and securely. The automation mimics natural browsing patterns to ensure safe operation.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step by Step Instructions -->
+                            <div class="row mb-5">
+                                <div class="col-12">
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-list-ol me-2"></i>Step-by-Step Instructions</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">1</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Navigate to Search Tab</h6>
+                                                                <p class="small text-muted mb-0">Click on either "Discovery Search" or "Keyword Search" tab based on your needs.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">2</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Enter Your Credentials</h6>
+                                                                <p class="small text-muted mb-0">Input your Maloum username and password. These are kept secure and only used for automation.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">3</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Configure Settings</h6>
+                                                                <p class="small text-muted mb-0">Set your target number of fans per search. Basic: up to 25, Pro: up to 100, Premium: unlimited. You can run multiple searches as needed.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-md-6">
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">4</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Enable Realtime Preview</h6>
+                                                                <p class="small text-muted mb-0">Keep "Realtime Preview" checked to watch the automation process live in your browser.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">5</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Start the Search</h6>
+                                                                <p class="small text-muted mb-0">Click "Start Discovery Search" or "Start Keyword Search" to begin the automation process.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="instruction-step mb-4">
+                                                        <div class="d-flex align-items-start">
+                                                            <div class="step-number">6</div>
+                                                            <div class="step-content ms-3">
+                                                                <h6 class="fw-bold">Monitor Progress</h6>
+                                                                <p class="small text-muted mb-0">Watch the progress bar and discovered fans list update in real-time. Use the stop button if needed.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tips and Best Practices -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-header bg-dark text-white">
+                                            <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Tips & Best Practices</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-success"><i class="fas fa-check-circle me-1"></i>Do's:</h6>
+                                                    <ul class="small">
+                                                        <li>Start within your per-search limits (Basic: 25, Pro: 100, Premium: unlimited)</li>
+                                                        <li>Run multiple searches to reach your desired total</li>
+                                                        <li>Use Realtime Preview to learn how it works</li>
+                                                        <li>Run searches during active hours</li>
+                                                        <li>Review discovered fans before engaging</li>
+                                                        <li>Use Discovery Search for quality engagement</li>
+                                                    </ul>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6 class="text-danger"><i class="fas fa-times-circle me-1"></i>Don'ts:</h6>
+                                                    <ul class="small">
+                                                        <li>Don't run multiple searches simultaneously</li>
+                                                        <li>Don't use excessive target numbers initially</li>
+                                                        <li>Don't close the browser during searches</li>
+                                                        <li>Don't share your credentials with others</li>
+                                                        <li>Don't ignore the progress indicators</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Support Section -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="alert alert-info border-0">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-comments fa-2x text-info me-3"></i>
+                                            <div>
+                                                <h6 class="mb-1">Need Help?</h6>
+                                                <p class="mb-0 small">Use the chat system in the bottom-right corner for real-time support, or check the System Status for current operation details.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Username Input Modal for Plan Selection -->
+    <div class="modal fade" id="usernameModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+                <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #ff6b35, #f7931e); border-radius: 15px 15px 0 0;">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-user-plus me-2"></i>
+                        <span id="usernameModalTitle">Choose Plan</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="text-center mb-4">
+                        <div class="bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-at text-primary fa-lg"></i>
+                        </div>
+                        <p class="text-muted mb-0">Enter your Maloum username to proceed with subscription</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="maloumUsername" class="form-label fw-bold">
+                            <i class="fas fa-user me-2"></i>Maloum Username
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="maloumUsername" 
+                               placeholder="Enter your Maloum username" required>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            This username will be used for your subscription reference
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info border-0" style="background-color: rgba(52, 144, 220, 0.1);">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-lightbulb text-info me-3"></i>
+                            <small>
+                                <strong>Important:</strong> Make sure this is the exact username you use on Maloum platform
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="continueWithPlan">
+                        <i class="fas fa-arrow-right me-2"></i>Continue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Free Trial Username Modal -->
+    <div class="modal fade" id="freeTrialModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+                <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #28a745, #20c997); border-radius: 15px 15px 0 0;">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-gift me-2"></i>Start Free Trial
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="text-center mb-4">
+                        <div class="bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                            <i class="fas fa-star text-success fa-lg"></i>
+                        </div>
+                        <h6 class="fw-bold text-success">24-Hour Free Trial</h6>
+                        <p class="text-muted mb-0">Get full access to all features for 24 hours</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="trialUsername" class="form-label fw-bold">
+                            <i class="fas fa-user me-2"></i>Maloum Username
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="trialUsername" 
+                               placeholder="Enter your Maloum username" required>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            This username will be registered for your free trial
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success border-0" style="background-color: rgba(40, 167, 69, 0.1);">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-clock text-success me-3"></i>
+                            <small>
+                                <strong>Trial Benefits:</strong> Access all features for 24 hours • No payment required • One-time offer
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="activateFreeTrial">
+                        <i class="fas fa-play me-2"></i>Start Trial
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Modal -->
+    <div class="modal fade" id="subscriptionModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+                <!-- Modern Header -->
+                <div class="modal-header border-0 text-white position-relative" style="background: linear-gradient(135deg, #ff6b35, #f7931e); padding: 2rem;">
+                    <div class="position-absolute top-0 end-0 m-3">
+                        <button type="button" class="btn-close btn-close-white opacity-75" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="w-100">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-white bg-opacity-20 rounded-circle p-3 me-3">
+                                <i class="fas fa-star text-white" style="font-size: 1.5rem;"></i>
+                            </div>
+                            <div>
+                                <h4 class="modal-title mb-0 fw-bold" id="modal-plan-title">Choose Your Plan</h4>
+                                <p class="mb-0 opacity-90" id="modal-plan-subtitle">Unlock all features</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modern Body -->
+                <div class="modal-body p-0">
+                    <div id="subscription-content" class="p-4">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Modern Footer -->
+                <div class="modal-footer border-0 bg-light p-4">
+                    <div class="d-flex w-100 gap-3">
+                        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div> <!-- End of main-content -->
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <!-- noVNC Web VNC Client -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js"></script>
+    <script src="app.js?v=2.8"></script>
+    <script src="chat-fix.js?v=1.0"></script>
+    <script>
+// Loading Screen Management
+function initializeLoadingScreen() {
+    const loadingScreen = document.getElementById('loading-screen');
+    const mainContent = document.querySelector('.main-content');
+    
+    // Simulate loading time (minimum 2 seconds for branding effect)
+    const minLoadTime = 2000;
+    const startTime = Date.now();
+    
+    // Hide loading screen after minimum time and when page is ready
+    function hideLoadingScreen() {
+        const elapsed = Date.now() - startTime;
+        const remainingTime = Math.max(0, minLoadTime - elapsed);
+        
+        setTimeout(() => {
+            loadingScreen.classList.add('fade-out');
+            mainContent.classList.add('show');
+            
+            // Remove loading screen from DOM after animation
+            setTimeout(() => {
+                loadingScreen.remove();
+            }, 500);
+        }, remainingTime);
+    }
+    
+    // Wait for all resources to load or minimum time
+    if (document.readyState === 'complete') {
+        hideLoadingScreen();
+    } else {
+        window.addEventListener('load', hideLoadingScreen);
+    }
+}
+
+// Initialize loading screen when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeLoadingScreen);
+} else {
+    initializeLoadingScreen();
+}
+
+// Clean up session storage when page is properly closed
+window.addEventListener('beforeunload', () => {
+    sessionStorage.removeItem('pageReloaded');
+});
+
+// VNC Client Implementation
+let vncClient = null;
+let vncConnected = false;
+
+function updateVNCStatus(message, type = 'info') {
+    const statusDiv = document.getElementById('vnc-status');
+    const statusText = document.getElementById('vnc-status-text');
+    
+    statusText.textContent = message;
+    statusDiv.className = `alert alert-${type} mb-3`;
+}
+
+function connectVNC() {
+    console.log('[VNC] Starting VNC connection...');
+    updateVNCStatus('Connecting to browser preview...', 'info');
+    
+    if (!window.app || !window.app.socket) {
+        updateVNCStatus('❌ WebSocket not available. Please refresh the page.', 'danger');
+        return;
+    }
+    
+    const placeholder = document.getElementById('vnc-placeholder');
+    
+    // Listen for VNC status updates
+    window.app.socket.on('vnc_status', function(data) {
+        console.log('[VNC] Status update:', data);
+        
+        if (data.status === 'connected') {
+            vncConnected = true;
+            updateVNCStatus('✅ Connected! Chrome browser is now visible.', 'success');
+            
+            placeholder.innerHTML = `
+                <div class="text-center text-white">
+                    <i class="fas fa-tv fa-4x mb-3 text-success"></i>
+                    <div class="h5">🎉 Browser Preview Active!</div>
+                    <div class="mb-3">Chrome automation is running live</div>
+                    <div class="alert alert-success">
+                        <strong>Success!</strong> Chrome browser is visible on VNC display<br>
+                        <small>Port 5900 • Display :99</small>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-success">
+                            <i class="fas fa-check-circle me-1"></i>
+                            Use external VNC viewer at <strong>localhost:5900</strong> to see live automation
+                        </small>
+                    </div>
+                </div>
+            `;
+            
+        } else if (data.status === 'error') {
+            updateVNCStatus(`❌ ${data.message}`, 'danger');
+            placeholder.innerHTML = `
+                <div class="text-center text-white">
+                    <i class="fas fa-exclamation-triangle fa-4x mb-3 text-warning"></i>
+                    <div class="h5">Connection Failed</div>
+                    <div class="mb-3">${data.message}</div>
+                    <button onclick="connectVNC()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+            
+        } else if (data.status === 'disconnected') {
+            vncConnected = false;
+            updateVNCStatus('Disconnected from browser preview.', 'warning');
+        }
+    });
+    
+    // Send connection request to backend
+    console.log('[VNC] Sending vnc_connect event...');
+    window.app.socket.emit('vnc_connect');
+}
+
+function disconnectVNC() {
+    if (vncClient) {
+        try {
+            vncClient.disconnect();
+        } catch (e) {
+            console.log('[VNC] Disconnect error:', e);
+        }
+        vncClient = null;
+    }
+    
+    // Clean up WebSocket listeners
+    if (window.app && window.app.socket) {
+        window.app.socket.off('vnc_data');
+        window.app.socket.off('vnc_status');
+        window.app.socket.emit('vnc_disconnect');
+    }
+    
+    const canvas = document.getElementById('vnc-canvas');
+    const placeholder = document.getElementById('vnc-placeholder');
+    
+    canvas.style.display = 'none';
+    placeholder.style.display = 'flex';
+    
+    // Reset placeholder to initial state
+    placeholder.innerHTML = `
+        <div class="text-center text-white">
+            <i class="fas fa-tv fa-4x mb-3 opacity-50"></i>
+            <div class="h5">Browser Preview</div>
+            <small class="text-muted">Click "Connect" to see browser automation live</small>
+        </div>
+    `;
+    
+    vncConnected = false;
+    updateVNCStatus('Disconnected. Click "Connect" to reconnect.', 'secondary');
+}
+
+function debugWebSocket() {
+    console.log('[DEBUG] === DEBUG WEBSOCKET FUNCTION CALLED ===');
+    updateVNCStatus('Testing basic WebSocket...', 'info');
+    
+    if (window.app && window.app.socket) {
+        console.log('[DEBUG] Socket available, sending vnc_debug event');
+        
+        window.app.socket.on('vnc_debug_response', function(data) {
+            console.log('[DEBUG] Received debug response:', data);
+            updateVNCStatus(`✅ WebSocket OK! ${data.message}`, 'success');
+        });
+        
+        window.app.socket.emit('vnc_debug');
+        console.log('[DEBUG] vnc_debug event sent');
+    } else {
+        console.log('[DEBUG] No socket available');
+        updateVNCStatus('❌ No WebSocket connection', 'danger');
+    }
+}
+
+function testVNCConnection() {
+    console.log('[VNC TEST] === TEST FUNCTION CALLED ===');
+    console.log('[VNC TEST] Testing WebSocket connectivity...');
+    updateVNCStatus('Testing WebSocket connection...', 'info');
+    
+    if (window.app && window.app.socket) {
+        console.log('[VNC TEST] WebSocket is available, app object:', window.app);
+        updateVNCStatus('✅ WebSocket available. Sending test event...', 'success');
+        
+        // Listen for VNC test response
+        window.app.socket.on('vnc_test_response', function(data) {
+            console.log('[VNC TEST] Received test response:', data);
+            updateVNCStatus(`✅ WebSocket working! Server says: ${data.message}`, 'success');
+        });
+        
+        // Send test event
+        try {
+            window.app.socket.emit('vnc_test');
+            console.log('[VNC TEST] Test event sent successfully');
+        } catch (e) {
+            console.error('[VNC TEST] Error sending test event:', e);
+            updateVNCStatus('❌ Error sending test event: ' + e.message, 'danger');
+        }
+        
+    } else {
+        console.log('[VNC TEST] WebSocket not available. window.app:', window.app);
+        if (window.app) {
+            console.log('[VNC TEST] window.app.socket:', window.app.socket);
+        }
+        updateVNCStatus('❌ WebSocket not available', 'danger');
+    }
+}
+
+function toggleFullscreen() {
+    const container = document.getElementById('vnc-container');
+    
+    if (!document.fullscreenElement) {
+        container.requestFullscreen().then(() => {
+            // Adjust VNC client for fullscreen
+            if (vncClient && vncConnected) {
+                container.style.height = '100vh';
+                vncClient.scaleViewport = true;
+            }
+        });
+    } else {
+        document.exitFullscreen().then(() => {
+            container.style.height = '500px';
+        });
+    }
+}
+
+// Auto-connect when Browser Preview tab is clicked
+document.addEventListener('DOMContentLoaded', () => {
+    const browserTab = document.getElementById('browser-preview-tab');
+    if (browserTab) {
+        browserTab.addEventListener('click', function() {
+            setTimeout(() => {
+                if (!vncConnected) {
+                    updateVNCStatus('Click "Connect" to start browser preview', 'info');
+                }
+            }, 100);
+        });
+    }
+});
+
+// Handle fullscreen change
+document.addEventListener('fullscreenchange', () => {
+    const container = document.getElementById('vnc-container');
+    if (!document.fullscreenElement) {
+        container.style.height = '500px';
+    }
+});
+
+</script>
+
+<!-- Update Required Modal -->
+<div class="modal fade" id="updateRequiredModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" style="display: none;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0" style="border-radius: 15px; overflow: hidden;">
+            <!-- Header with theme colors -->
+            <div class="modal-header text-white border-0 p-4" style="background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-white bg-opacity-20 p-3 me-3">
+                        <i class="fas fa-robot text-white" style="font-size: 20px;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 fw-bold">Update Required</h5>
+                        <small class="opacity-90">Critical update available</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Body -->
+            <div class="modal-body p-4">
+                <div class="text-center mb-4">
+                    <div class="d-flex align-items-center justify-content-center mb-3">
+                        <div class="bg-light rounded-pill px-3 py-2 me-2">
+                            <small class="fw-bold text-muted">Current</small>
+                            <div class="fw-bold" id="current-version" style="color: #6c757d;">v1.0.0</div>
+                        </div>
+                        <i class="fas fa-arrow-right mx-3" style="color: #FF6B35;"></i>
+                        <div class="rounded-pill px-3 py-2" style="background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%); color: white;">
+                            <small class="fw-bold">Latest</small>
+                            <div class="fw-bold" id="update-version">v1.1.0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-3" style="height: 8px; border-radius: 10px;">
+                        <div class="progress-bar" role="progressbar" style="width: 100%; background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);"></div>
+                    </div>
+                </div>
+                
+                <div id="update-description" class="mb-4" style="display: none;">
+                    <div class="card bg-light border-0" style="border-radius: 10px;">
+                        <div class="card-body p-3">
+                            <h6 class="mb-2 fw-bold" style="color: #FF6B35;">
+                                <i class="fas fa-star me-2"></i>What's New
+                            </h6>
+                            <div id="update-notes" class="small text-muted"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning bg-light border-0" style="border-radius: 10px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle me-3" style="color: #F7931E;"></i>
+                        <div>
+                            <strong>This update is required to continue</strong><br>
+                            <small class="text-muted">Your current version is no longer supported. Please update to continue using Fan Finder.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="button" class="btn btn-lg fw-bold w-100" onclick="downloadUpdate()" style="background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%); color: white; border: none; border-radius: 10px; padding: 12px;">
+                    <i class="fas fa-download me-2"></i>Install Update Now
+                </button>
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt me-1" style="color: #FF6B35;"></i>
+                        Secure automatic installation
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Chat System -->
+<div id="chat-system">
+    <!-- Chat Bubble Button -->
+    <div id="chat-bubble" class="chat-bubble" onclick="toggleChat()">
+        <i class="fas fa-comments"></i>
+        <div id="chat-badge" class="chat-badge" style="display: none;">
+            <span id="chat-badge-count">0</span>
+        </div>
+    </div>
+
+    <!-- Chat Window -->
+    <div id="chat-window" class="chat-window">
+        <!-- Chat Header -->
+        <div class="chat-header">
+            <div class="d-flex align-items-center">
+                <div class="chat-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="ms-2">
+                    <div class="chat-title">Fan Finder Support</div>
+                    <div class="chat-status">
+                        <div class="status-dot"></div>
+                        Online
+                    </div>
+                </div>
+            </div>
+            <button class="chat-close" onclick="toggleChat()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Chat Messages -->
+        <div id="chat-messages" class="chat-messages">
+            <div class="message-day">
+                <span>Today</span>
+            </div>
+            
+            <!-- Welcome Message -->
+            <div class="message admin-message">
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-bubble">
+                        <div class="message-text">
+                            👋 Welcome to Fan Finder! I'm here to help you with any questions about the app, payments, or technical support.
+                        </div>
+                        <div class="message-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div id="chat-quick-actions" class="chat-quick-actions">
+            <div class="quick-actions-header">
+                <span class="quick-actions-title">Quick Help</span>
+                <button class="quick-actions-close" onclick="hideQuickActions()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="quick-action-buttons">
+                <button class="quick-action-btn" onclick="sendQuickMessage('How do I start a search?')">
+                    <i class="fas fa-search me-1"></i>How to search
+                </button>
+                <button class="quick-action-btn" onclick="sendQuickMessage('I need help with payment')">
+                    <i class="fas fa-credit-card me-1"></i>Payment help
+                </button>
+                <button class="quick-action-btn" onclick="sendQuickMessage('Technical issue')">
+                    <i class="fas fa-bug me-1"></i>Tech support
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <input type="text" id="chat-input" class="chat-input" placeholder="Type your message..." onkeypress="handleChatKeypress(event)" maxlength="500">
+                <button id="chat-send" class="chat-send-btn" onclick="sendMessage()">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="chat-typing-indicator" id="typing-indicator" style="display: none;">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <span class="typing-text">Support is typing...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Chat System Styles */
+.chat-bubble {
+    position: fixed !important;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.chat-bubble:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(255, 107, 53, 0.4);
+}
+
+.chat-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    border: 2px solid white;
+}
+
+.chat-window {
+    position: fixed !important;
+    bottom: 24px;
+    right: 24px;
+    width: 380px;
+    height: 500px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    display: none;
+    flex-direction: column;
+    z-index: 1001;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.chat-window.open {
+    display: flex;
+    animation: chatSlideUp 0.3s ease-out;
+}
+
+@keyframes chatSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.chat-header {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: white;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chat-avatar {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.chat-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.chat-status {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #28a745;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.chat-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: background 0.2s ease;
+}
+
+.chat-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f8f9fa;
+}
+
+.message-day {
+    text-align: center;
+    margin: 16px 0;
+}
+
+.message-day span {
+    background: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: #6c757d;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.message {
+    display: flex;
+    margin-bottom: 16px;
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.9rem;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.admin-message .message-avatar {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+}
+
+.user-message {
+    flex-direction: row-reverse;
+}
+
+.user-message .message-avatar {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+.user-message .message-content {
+    align-items: flex-end;
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.message-bubble {
+    background: white;
+    padding: 12px 16px;
+    border-radius: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.user-message .message-bubble {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.admin-message .message-bubble {
+    border-bottom-left-radius: 4px;
+}
+
+.message-text {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-bottom: 4px;
+}
+
+.message-time {
+    font-size: 0.7rem;
+    color: #6c757d;
+    opacity: 0.8;
+}
+
+.user-message .message-time {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.chat-quick-actions {
+    padding: 12px 16px;
+    border-top: 1px solid #e9ecef;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-quick-actions.hidden {
+    display: none;
+}
+
+.quick-actions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.quick-actions-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.quick-actions-close {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: all 0.2s ease;
+}
+
+.quick-actions-close:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.chat-quick-actions .quick-action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.quick-action-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.quick-action-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.chat-input-container {
+    padding: 16px;
+    background: white;
+    border-top: 1px solid #e9ecef;
+}
+
+.chat-input-wrapper {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 24px;
+    padding: 4px 4px 4px 16px;
+}
+
+.chat-input {
+    flex: 1;
+    border: none;
+    background: none;
+    outline: none;
+    padding: 8px 0;
+    font-size: 0.9rem;
+    resize: none;
+}
+
+.chat-send-btn {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.chat-send-btn:hover {
+    transform: scale(1.05);
+}
+
+.chat-send-btn:disabled {
+    background: #dee2e6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.typing-indicator {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.typing-dots {
+    display: flex;
+    margin-right: 8px;
+}
+
+.typing-dots span {
+    width: 4px;
+    height: 4px;
+    background: #6c757d;
+    border-radius: 50%;
+    margin-right: 2px;
+    animation: typingDot 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+    0%, 60%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    30% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+@media (max-width: 480px) {
+    .chat-window {
+        width: calc(100vw - 48px) !important;
+        height: 70vh !important;
+        bottom: 12px !important;
+        right: 24px !important;
+        left: 24px !important;
+    }
+    
+    .chat-bubble {
+        bottom: 12px !important;
+        right: 12px !important;
+    }
+}
+</style>
+
+<script>
+
+// Username Modal Management
+window.usernameModalManager = {
+    selectedPlan: null,
+    selectedUsername: null,
+
+    // Show username modal for plan selection
+    showUsernameModal(planType) {
+        this.selectedPlan = planType;
+        
+        // Update modal title based on plan
+        const planNames = {
+            'monthly': 'Basic Plan',
+            'sixmonth': 'Pro Plan', 
+            'yearly': 'Premium Plan'
+        };
+        
+        document.getElementById('usernameModalTitle').textContent = `Choose ${planNames[planType] || 'Plan'}`;
+        
+        // Clear previous input
+        document.getElementById('maloumUsername').value = '';
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('usernameModal'));
+        modal.show();
+    },
+
+    // Show free trial modal
+    showFreeTrialModal() {
+        // Clear previous input
+        document.getElementById('trialUsername').value = '';
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('freeTrialModal'));
+        modal.show();
+    },
+
+    // Continue with plan after username input
+    continueWithPlan() {
+        const username = document.getElementById('maloumUsername').value.trim();
+        
+        if (!username) {
+            this.showAlert('Please enter your Maloum username', 'warning');
+            return;
+        }
+        
+        // Validate username format (basic validation)
+        if (username.length < 3) {
+            this.showAlert('Username must be at least 3 characters long', 'warning');
+            return;
+        }
+        
+        this.selectedUsername = username;
+        
+        // Add pending subscription to subscription manager
+        this.addPendingSubscription(username, this.selectedPlan);
+        
+        // Hide username modal
+        const usernameModal = bootstrap.Modal.getInstance(document.getElementById('usernameModal'));
+        usernameModal.hide();
+        
+        // Show subscription modal with selected plan and username
+        setTimeout(() => {
+            console.log('Attempting to show payment modal for plan:', this.selectedPlan, 'username:', this.selectedUsername);
+            console.log('window.app exists:', !!window.app);
+            console.log('window.app.showPlanModal exists:', !!(window.app && window.app.showPlanModal));
+            
+            if (window.app && window.app.showPlanModal) {
+                window.app.showPlanModal(this.selectedPlan, this.selectedUsername);
+            } else {
+                console.error('window.app.showPlanModal not available');
+                this.showAlert('Payment modal failed to load. Please try again.', 'error');
+            }
+        }, 300);
+    },
+
+    // Add pending subscription to subscription manager
+    addPendingSubscription(username, planType) {
+        // Get plan details
+        const planDetails = this.getPlanDetails(planType);
+        
+        // Calculate expiration date (30 days from today for all plans)
+        const today = new Date();
+        const expirationDate = new Date(today);
+        expirationDate.setMonth(today.getMonth() + 1);
+        
+        // Create pending subscription object
+        const pendingSubscription = {
+            id: Date.now().toString(),
+            email: username, // Use username directly without email format
+            plan: planDetails.planName,
+            expirationDate: expirationDate.toISOString().split('T')[0],
+            status: 'pending',
+            addedDate: new Date().toISOString().split('T')[0],
+            paymentStatus: 'pending',
+            amount: planDetails.price,
+            currency: planDetails.currency
+        };
+        
+        // Log subscription creation (local subscription manager removed)
+        console.log('Pending subscription created:', pendingSubscription);
+    },
+
+    // Get plan details based on plan type
+    getPlanDetails(planType) {
+        const plans = {
+            'monthly': {
+                planName: 'Basic',
+                price: '20',
+                currency: '€'
+            },
+            'sixmonth': {
+                planName: 'Pro', 
+                price: '84',
+                currency: '€'
+            },
+            'yearly': {
+                planName: 'Premium',
+                price: '168',
+                currency: '€'
+            }
+        };
+        
+        return plans[planType] || plans['monthly'];
+    },
+
+    // Activate free trial with username
+    activateFreeTrial() {
+        const username = document.getElementById('trialUsername').value.trim();
+        
+        if (!username) {
+            this.showAlert('Please enter your Maloum username', 'warning');
+            return;
+        }
+        
+        // Validate username format (basic validation)
+        if (username.length < 3) {
+            this.showAlert('Username must be at least 3 characters long', 'warning');
+            return;
+        }
+        
+        // Add pending trial subscription to subscription manager
+        this.addTrialSubscription(username);
+        
+        // Hide trial modal
+        const trialModal = bootstrap.Modal.getInstance(document.getElementById('freeTrialModal'));
+        trialModal.hide();
+        
+        // Call the original free trial function with username
+        setTimeout(() => {
+            if (window.app && window.app.activateFreeTrial) {
+                window.app.activateFreeTrial(username);
+            }
+        }, 300);
+    },
+
+    // Add trial subscription to subscription manager
+    addTrialSubscription(username) {
+        // Calculate expiration date (24 hours from now)
+        const now = new Date();
+        const expirationDate = new Date(now);
+        expirationDate.setHours(now.getHours() + 24);
+        
+        // Create trial subscription object
+        const trialSubscription = {
+            id: Date.now().toString(),
+            email: username, // Use username directly without email format
+            plan: 'Free Trial',
+            expirationDate: expirationDate.toISOString().split('T')[0],
+            status: 'active', // Free trial is immediately active
+            addedDate: new Date().toISOString().split('T')[0],
+            paymentStatus: 'completed', // No payment required for trial
+            amount: '0',
+            currency: '€',
+            isTrial: true
+        };
+        
+        // Add to subscription manager if it exists
+        // Log trial subscription creation (local subscription manager removed)
+        console.log('Free trial subscription activated for user:', username);
+        this.showAlert(`Activated 24-hour free trial for ${username}`, 'success');
+    },
+
+    // Show alert message
+    showAlert(message, type = 'info') {
+        // Create alert element
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+};
+
+// Add to window.app for compatibility - ensure it's attached after everything loads
+window.addEventListener('load', () => {
+    console.log('[MODAL_ATTACH] Window loaded, attempting to attach functions');
+    console.log('[MODAL_ATTACH] window.app exists:', !!window.app);
+    console.log('[MODAL_ATTACH] window.subscriptionManager exists:', !!window.subscriptionManager);
+    
+    // Function to attach username modal functions
+    const attachFunctions = () => {
+        if (window.app) {
+            window.app.showUsernameModal = (planType) => {
+                console.log('[MODAL_ATTACH] showUsernameModal called with:', planType);
+                return window.usernameModalManager.showUsernameModal(planType);
+            };
+            window.app.showFreeTrialModal = () => {
+                console.log('[MODAL_ATTACH] showFreeTrialModal called');
+                return window.usernameModalManager.showFreeTrialModal();
+            };
+            console.log('[MODAL_ATTACH] Username modal functions attached to window.app');
+            return true;
+        }
+        return false;
+    };
+    
+    // Try to attach immediately
+    if (!attachFunctions()) {
+        console.log('[MODAL_ATTACH] window.app not ready, retrying...');
+        // If not available, try multiple times with increasing delay
+        let attempts = 0;
+        const maxAttempts = 20; // Increased attempts
+        
+        const tryAttach = () => {
+            attempts++;
+            console.log(`[MODAL_ATTACH] Attempt ${attempts}/${maxAttempts}`);
+            
+            if (attachFunctions() || attempts >= maxAttempts) {
+                if (attempts >= maxAttempts && !window.app) {
+                    console.error('[MODAL_ATTACH] window.app still not found after', maxAttempts, 'attempts, creating fallback');
+                    // Create fallback if app doesn't exist
+                    window.app = window.app || {};
+                    window.app.showUsernameModal = (planType) => {
+                        console.log('[MODAL_ATTACH] Fallback showUsernameModal called with:', planType);
+                        return window.usernameModalManager.showUsernameModal(planType);
+                    };
+                    window.app.showFreeTrialModal = () => {
+                        console.log('[MODAL_ATTACH] Fallback showFreeTrialModal called');
+                        return window.usernameModalManager.showFreeTrialModal();
+                    };
+                    console.log('[MODAL_ATTACH] Fallback functions created');
+                }
+                return;
+            }
+            setTimeout(tryAttach, 200); // Consistent 200ms delay
+        };
+        
+        setTimeout(tryAttach, 500); // Initial delay of 500ms
+    }
+});
+
+// Event listeners for modal buttons
+document.addEventListener('DOMContentLoaded', () => {
+    // Continue with plan button
+    document.getElementById('continueWithPlan').addEventListener('click', () => {
+        window.usernameModalManager.continueWithPlan();
+    });
+    
+    // Activate free trial button
+    document.getElementById('activateFreeTrial').addEventListener('click', () => {
+        window.usernameModalManager.activateFreeTrial();
+    });
+    
+    // Enter key support for username inputs
+    document.getElementById('maloumUsername').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            window.usernameModalManager.continueWithPlan();
+        }
+    });
+    
+    document.getElementById('trialUsername').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            window.usernameModalManager.activateFreeTrial();
+        }
+    });
+});
+</script>
+
+</body>
+</html>

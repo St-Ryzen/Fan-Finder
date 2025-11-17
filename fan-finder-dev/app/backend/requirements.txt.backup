@@ -1,0 +1,29 @@
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+Flask-CORS==4.0.0
+python-dotenv==1.0.0
+firebase-admin==6.2.0
+supabase>=2.0.0
+python-socketio==5.8.0
+eventlet==0.33.3
+psutil==5.9.5
+
+# Existing automation dependencies
+selenium==4.21.0
+undetected-chromedriver>=3.5.5
+requests==2.32.3
+cryptography==42.0.8
+
+# AirTable integration
+pyairtable>=2.2.0
+
+# Optional
+colorlog==6.7.0
+
+# Development & Testing
+playwright==1.44.0
+
+# Additional compatibility packages to handle distutils removal in Python 3.12+
+setuptools>=69.0.0
+importlib-metadata>=7.0.0; python_version>="3.12"
+packaging>=24.0

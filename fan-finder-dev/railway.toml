@@ -1,0 +1,19 @@
+# Railway Configuration for Fan Finder
+# https://docs.railway.app/deploy/config-as-code
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway will automatically set $PORT - our app reads it via os.environ.get('PORT')
+startCommand = "python app/backend/app.py"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/api/debug-test"
+healthcheckTimeout = 60
+
+[env]
+# These will be overridden by Railway dashboard environment variables
+FLASK_ENV = "production"
+PYTHONUNBUFFERED = "1"

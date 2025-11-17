@@ -1,0 +1,76 @@
+# Don't copy these files/folders into Docker container (speeds up builds)
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+*.whl
+
+# Environment files (will be set via Railway dashboard)
+.env
+.env.*
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+README.md
+CLAUDE.md
+*.md
+
+# Archive folder (not needed in production)
+../Archive/
+
+# Local development files
+server-for-windows.bat
+launcher.py
+build_exe.py
+FanFinder.spec
+RUN_FANFINDER.bat
+
+# Database files (should be in Supabase, not local)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Model board (development only)
+../model-board/
+
+# Build artifacts
+../build/
+../dist/
+
+# Recovered files
+../recovered_fan_finder/
+
+# Null files
+../nul

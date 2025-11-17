@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Fan Finder</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    <link rel="shortcut icon" href="favicon.ico">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .admin-login-container {
+            max-width: 400px;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        .login-header {
+            margin-bottom: 30px;
+        }
+        
+        .login-header h2 {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .login-header p {
+            color: #666;
+            margin: 0;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .form-control {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .login-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .alert {
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .security-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .security-notice .fas {
+            color: #ffc107;
+            margin-right: 8px;
+        }
+        
+        .security-notice small {
+            color: #856404;
+        }
+        
+        .loading-spinner {
+            display: none;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h2>
+                    <i class="fas fa-shield-alt text-primary me-2"></i>
+                    Admin Access
+                </h2>
+                <p>Secure Supabase-based authentication</p>
+            </div>
+            
+            <div id="alert-container"></div>
+            
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <label for="adminKey" class="form-label">
+                        <i class="fas fa-key me-1"></i>Admin Key
+                    </label>
+                    <input 
+                        type="password" 
+                        class="form-control" 
+                        id="adminKey" 
+                        placeholder="Enter your Supabase admin key"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <i class="fas fa-spinner fa-spin loading-spinner"></i>
+                    <i class="fas fa-sign-in-alt me-2"></i>
+                    Access Dashboard
+                </button>
+            </form>
+            
+            <div class="security-notice">
+                <small>
+                    <i class="fas fa-info-circle"></i>
+                    This admin panel is protected by Supabase authentication. Only users with valid Supabase admin credentials can access the dashboard.
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('adminLoginForm');
+            const adminKeyInput = document.getElementById('adminKey');
+            const loginBtn = document.getElementById('loginBtn');
+            const alertContainer = document.getElementById('alert-container');
+            const loadingSpinner = document.querySelector('.loading-spinner');
+            
+            // Check if already authenticated
+            const storedKey = localStorage.getItem('fan_finder_admin_key');
+            if (storedKey) {
+                verifyStoredKey(storedKey);
+            }
+            
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const adminKey = adminKeyInput.value.trim();
+                
+                if (!adminKey) {
+                    showAlert('Admin key is required', 'danger');
+                    return;
+                }
+                
+                await authenticateAdmin(adminKey);
+            });
+            
+            async function authenticateAdmin(adminKey) {
+                try {
+                    // Show loading state
+                    loginBtn.disabled = true;
+                    loadingSpinner.style.display = 'inline-block';
+                    
+                    const response = await fetch('/api/admin/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            admin_key: adminKey
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Store admin key for session
+                        localStorage.setItem('fan_finder_admin_key', adminKey);
+                        
+                        showAlert('Authentication successful! Redirecting...', 'success');
+                        
+                        // Redirect to admin dashboard with key
+                        setTimeout(() => {
+                            window.location.href = `/admin?key=${encodeURIComponent(adminKey)}`;
+                        }, 1000);
+                    } else {
+                        showAlert(result.message || 'Authentication failed', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Authentication error:', error);
+                    showAlert('Network error. Please try again.', 'danger');
+                } finally {
+                    // Hide loading state
+                    loginBtn.disabled = false;
+                    loadingSpinner.style.display = 'none';
+                }
+            }
+            
+            async function verifyStoredKey(adminKey) {
+                try {
+                    const response = await fetch('/api/admin/auth', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            admin_key: adminKey
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Automatically redirect to dashboard
+                        window.location.href = `/admin?key=${encodeURIComponent(adminKey)}`;
+                    } else {
+                        // Clear invalid stored key
+                        localStorage.removeItem('fan_finder_admin_key');
+                    }
+                } catch (error) {
+                    console.error('Stored key verification failed:', error);
+                    localStorage.removeItem('fan_finder_admin_key');
+                }
+            }
+            
+            function showAlert(message, type) {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            }
+            
+            // Auto-focus admin key input
+            adminKeyInput.focus();
+        });
+    </script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

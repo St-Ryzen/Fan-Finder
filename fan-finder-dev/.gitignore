@@ -1,0 +1,113 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+firebase-key*.json
+app/config/secrets.json
+app/config/firebase-key*.json
+
+# Database files (use Supabase instead)
+*.db
+*.sqlite
+*.sqlite3
+security.db
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# OS Files
+Thumbs.db
+.DS_Store
+*.lnk
+
+# Build and compiled files
+*.exe
+*.spec
+FanFinder.spec
+build_exe.py
+
+# Windows batch files (local development only)
+server-for-windows.bat
+RUN_FANFINDER.bat
+launcher.py
+
+# Archive and backup folders
+Archive/
+recovered_fan_finder/
+model-board/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+nul
+
+# Node modules (if any)
+node_modules/
+
+# Cache directories
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Environments
+.env.local
+.env.*.local

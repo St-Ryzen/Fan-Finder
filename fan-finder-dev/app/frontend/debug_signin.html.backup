@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Signin Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f0f0f0; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        input, button { margin: 5px 0; padding: 8px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Debug Signin Test</h1>
+    
+    <div>
+        <label>Username: <input type="text" id="username" value="testuser"></label><br>
+        <label>Password: <input type="password" id="password" value="testpass"></label><br>
+        <button onclick="testSignin()">Test Signin</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log ${type}`;
+            logEntry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        async function testSignin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            log(`Starting signin test for username: "${username}"`);
+            
+            try {
+                log('Preparing request payload...');
+                const payload = { username, password, action: 'signin' };
+                log(`Payload: ${JSON.stringify(payload)}`);
+                
+                log('Sending POST request to /api/auth/signup...');
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`);
+                log(`Response headers: ${JSON.stringify(Object.fromEntries(response.headers))}`);
+                
+                if (!response.ok) {
+                    log(`HTTP Error: ${response.status} ${response.statusText}`, 'error');
+                    const errorText = await response.text();
+                    log(`Error body: ${errorText}`, 'error');
+                    return;
+                }
+                
+                log('Parsing JSON response...');
+                const data = await response.json();
+                log(`Response data: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.success) {
+                    log('SUCCESS: Authentication successful!', 'success');
+                    log(`Token received: ${data.token ? 'YES' : 'NO'}`, 'success');
+                    log(`User data: ${JSON.stringify(data.user)}`, 'success');
+                    
+                    // Test localStorage
+                    log('Testing localStorage...');
+                    localStorage.setItem('fanfinder_token', data.token);
+                    localStorage.setItem('fanfinder_user', JSON.stringify(data.user));
+                    log('Data saved to localStorage', 'success');
+                    
+                } else {
+                    log('FAILURE: Authentication failed', 'error');
+                    log(`Error message: ${data.message || 'No message provided'}`, 'error');
+                    log(`Full response: ${JSON.stringify(data)}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`EXCEPTION: ${error.message}`, 'error');
+                log(`Error stack: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Test on page load
+        window.addEventListener('load', () => {
+            log('Debug page loaded');
+            log(`Current URL: ${window.location.href}`);
+            log(`User agent: ${navigator.userAgent}`);
+        });
+    </script>
+</body>
+</html>

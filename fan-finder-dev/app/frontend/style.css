@@ -1,0 +1,611 @@
+/* frontend/style.css - Original Fan Finder Design */
+
+/* Glassmorphism Alert Styles */
+.alert {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 12px;
+    color: white !important;
+}
+
+.alert-info {
+    background-color: rgba(13, 110, 253, 0.15) !important;
+    border-color: rgba(13, 110, 253, 0.3) !important;
+}
+
+.alert-success {
+    background-color: rgba(25, 135, 84, 0.15) !important;
+    border-color: rgba(25, 135, 84, 0.3) !important;
+}
+
+.alert-warning {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    border-color: rgba(255, 193, 7, 0.3) !important;
+}
+
+.alert-danger {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-color: rgba(220, 53, 69, 0.3) !important;
+}
+
+/* Payment Tracker Styles */
+.payment-tracker {
+    background: rgba(248, 249, 250, 0.45);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    color: #1a1a1a;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    z-index: 1;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 1;
+    position: relative;
+    z-index: 2;
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.step.active .step-icon {
+    background: #ff6b35;
+    color: white;
+    transform: scale(1.1);
+}
+
+.step-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 500;
+    max-width: 80px;
+}
+
+.step.active .step-text {
+    color: #ff6b35;
+    font-weight: 600;
+}
+
+.status-message {
+    text-align: center;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Payment Details Enhancements */
+.payment-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.payment-item:last-child {
+    border-bottom: none;
+}
+
+.payment-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.payment-value {
+    font-family: 'Courier New', monospace;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* Alert styling for smart payment detection - Orange theme */
+.alert-info {
+    background-color: #fff3e0;
+    border-color: #ffcc80;
+    color: #e65100;
+}
+
+/* Orange primary buttons */
+.btn-primary {
+    background-color: #ff6b35;
+    border-color: #ff6b35;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #e55a2e;
+    border-color: #e55a2e;
+}
+
+.btn-primary:focus,
+.btn-primary.focus {
+    box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+}
+
+.btn-primary:not(:disabled):not(.disabled):active,
+.btn-primary:not(:disabled):not(.disabled).active {
+    background-color: #d44f28;
+    border-color: #d44f28;
+}
+
+/* Override Bootstrap info colors to match orange theme */
+.bg-info {
+    background-color: #ff6b35 !important;
+}
+
+.text-info {
+    color: #ff6b35 !important;
+}
+
+.border-info {
+    border-color: #ff6b35 !important;
+}
+
+.btn-info {
+    background-color: #ff6b35;
+    border-color: #ff6b35;
+    color: white;
+}
+
+.btn-info:hover {
+    background-color: #e55a2e;
+    border-color: #e55a2e;
+}
+
+/* Progress bar orange styling */
+.progress-bar.bg-primary {
+    background-color: #ff6b35 !important;
+}
+
+/* Payment Pending State Styling */
+.payment-pending {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    margin-bottom: 20px;
+}
+
+.pending-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.pending-item:last-child {
+    border-bottom: none;
+}
+
+.pending-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Warning alert styling */
+.alert-warning {
+    background-color: #fff8e1;
+    border-color: #ffecb3;
+    color: #e65100;
+}
+
+.alert-warning .fas {
+    color: #ff9800;
+}
+
+/* Status badges */
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529;
+}
+
+/* Orange navbar to match original */
+.navbar.bg-primary {
+    background-color: #ff6b35 !important;
+}
+
+/* System Status styling to match original */
+.bg-dark {
+    background-color: #343a40 !important;
+}
+
+/* System Status card body - glassmorphism effect */
+.card-body {
+    background-color: rgba(248, 249, 250, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    color: #1a1a1a !important;
+}
+
+/* Card header glassmorphism */
+.card-header {
+    background-color: rgba(33, 37, 41, 0.85) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 107, 53, 0.5) !important;
+    color: white !important;
+}
+
+/* Orange border under the dark System Status header - thinner */
+.card-header.bg-dark {
+    border-bottom: 1px solid #ff6b35 !important;
+    background-color: rgba(33, 37, 41, 0.9) !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Section headers (h5, h6) */
+.card-header h5,
+.card-header h6 {
+    color: white !important;
+    margin: 0;
+}
+
+/* Main section titles */
+h5, h6 {
+    color: rgba(255, 255, 255, 0.95) !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Default text color for visibility */
+body, p, a, li, span {
+    color: #1a1a1a;
+}
+
+/* Text inside cards with light background */
+.card-body p,
+.card-body a,
+.card-body li,
+.card-body span {
+    color: #1a1a1a !important;
+}
+
+/* Small instruction text styling */
+small, .small {
+    color: #333 !important;
+}
+
+.text-muted {
+    color: #666 !important;
+}
+
+/* Nav tabs styling */
+.nav-tabs {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 12px;
+    padding: 8px;
+}
+
+/* Badge styling */
+.badge {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Form input styling */
+.form-control,
+.form-select {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    backdrop-filter: blur(10px);
+}
+
+.form-control::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 107, 53, 0.5) !important;
+    color: white !important;
+    box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25) !important;
+}
+
+/* Remove default card borders to clean up appearance */
+.card {
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Orange active tab styling - exact match */
+.nav-tabs .nav-link.active {
+    background-color: #ff6b35 !important;
+    color: white !important;
+    border-color: #ff6b35 !important;
+    border-bottom-color: transparent !important;
+}
+
+/* Fix active tab hover to keep white text visible */
+.nav-tabs .nav-link.active:hover {
+    background-color: #ff6b35 !important;
+    color: white !important;
+    border-color: #ff6b35 !important;
+}
+
+/* Inactive tab styling */
+.nav-tabs .nav-link {
+    color: rgba(255, 255, 255, 0.7) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-color: transparent !important;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+/* Inactive tab hover */
+.nav-tabs .nav-link:hover {
+    color: #ff6b35 !important;
+    border-color: transparent !important;
+    background-color: rgba(255, 107, 53, 0.15) !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Orange toggle switch */
+.form-check-input:checked {
+    background-color: #ff6b35 !important;
+    border-color: #ff6b35 !important;
+}
+
+/* Fix light blue text-primary to orange */
+.text-primary {
+    color: #ff6b35 !important;
+}
+
+/* Fix blue badges to orange */
+.badge.bg-primary {
+    background-color: #ff6b35 !important;
+}
+
+/* Status indicators */
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.status-ready { 
+    background-color: #28a745; 
+}
+
+.status-running { 
+    background-color: #ffc107;
+    animation: pulse 1.5s infinite;
+}
+
+.status-stopped { 
+    background-color: #dc3545; 
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Progress bars */
+.progress {
+    height: 20px;
+    background-color: rgba(248, 249, 250, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+}
+
+.progress-bar.running {
+    animation: progress-animation 2s linear infinite;
+}
+
+/* Instance progress container styling */
+.instance-progress {
+    padding: 1rem;
+    background: rgba(248, 249, 250, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.progress-label {
+    font-weight: 600;
+    color: white;
+    font-size: 0.95rem;
+}
+
+.progress-text {
+    color: #ff6b35;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+@keyframes progress-animation {
+    0% { background-position: 0 0; }
+    100% { background-position: 40px 40px; }
+}
+
+/* Connection Status (hidden by default) */
+.connection-status.connected {
+    background-color: #28a745 !important;
+    color: white;
+}
+
+.connection-status.disconnected {
+    background-color: #dc3545 !important;
+    color: white;
+}
+
+/* Override Bootstrap bg-light class for glassmorphism */
+.bg-light {
+    background-color: rgba(248, 249, 250, 0.45) !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Override Bootstrap card default white background */
+.card {
+    background-color: rgba(248, 249, 250, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Card with bg-light should also have glassmorphism */
+.card.bg-light {
+    background-color: rgba(248, 249, 250, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Override Bootstrap modal-content white background */
+.modal-content {
+    background-color: transparent !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Override modal header */
+.modal-header {
+    background-color: rgba(33, 37, 41, 0.85) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 107, 53, 0.5) !important;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+/* Override modal body */
+.modal-body {
+    background-color: transparent !important;
+    color: #1a1a1a !important;
+}
+
+/* Override modal footer */
+.modal-footer {
+    background-color: rgba(248, 249, 250, 0.3) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Matte green for success badges and buttons */
+.badge.bg-success,
+.btn-success,
+.btn.btn-success {
+    background-color: #5a8d7a !important;
+    border-color: #5a8d7a !important;
+}
+
+.btn-success:hover,
+.btn.btn-success:hover {
+    background-color: #4a7a69 !important;
+    border-color: #4a7a69 !important;
+}
+
+.badge.bg-success {
+    color: white !important;
+}
+
+/* Dropdown menu styling for better readability */
+.dropdown-menu {
+    background-color: rgba(33, 37, 41, 0.95) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown-item {
+    color: white !important;
+    background-color: transparent;
+    transition: all 0.3s ease;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: rgba(255, 107, 53, 0.2) !important;
+    color: white !important;
+}
+
+.dropdown-item-text {
+    color: white !important;
+    font-weight: 500;
+}
+
+.dropdown-header {
+    color: #ff6b35 !important;
+    background-color: transparent;
+    font-weight: 600;
+}
+
+.dropdown-divider {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Improve text visibility in dropdowns */
+.dropdown-item-text.text-muted {
+    color: #d0d0d0 !important;
+}
+
+/* User dropdown button styling */
+#userDropdown {
+    color: white !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+#userDropdown:hover {
+    background-color: rgba(255, 107, 53, 0.15) !important;
+    border-color: rgba(255, 107, 53, 0.5) !important;
+}
